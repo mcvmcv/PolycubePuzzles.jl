@@ -35,5 +35,5 @@ save(joinpath(outdir, "y5_steps.png"), plot_steps(sol5; panelsize = 300))
 animate_assembly(sol5, joinpath(outdir, "y5.gif"); size = (500, 500))
 
 # Pentominoes in a 10x6 rectangle
-pent = solve(Puzzle(box(10, 6), [s => 1 for s in pentominoes()]); limit = 1)[1]
+pent = solve(Puzzle(box(10, 6), [s => 1 for s in pentominoes()]; reflections = true); limit = 1)[1]
 save(joinpath(outdir, "pentominoes.png"), plot_solution(pent; size = (500, 300)))

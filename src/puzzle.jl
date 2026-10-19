@@ -1,5 +1,5 @@
 """
-    Puzzle(target::Shape{N}, pieces; reflections = (N == 2))
+    Puzzle(target::Shape{N}, pieces; reflections = false)
 
 A packing puzzle: cover every cell of `target` exactly once using the given
 pieces. `pieces` is a `piece => count` pair or a vector of them, where `count`
@@ -7,10 +7,9 @@ is an `Int` (use exactly that many) or a `UnitRange` (use between `first` and
 `last` copies). Copies of one piece type are indistinguishable, so solutions
 that only permute them are counted once.
 
-`reflections` controls whether pieces may be mirrored. The default allows it in
-2D (a flat piece can be turned over) and forbids it otherwise (a physical 3D
-piece can't be mirrored). Note that a planar piece in 3D has its mirror image
-among its rotations anyway.
+`reflections` controls whether pieces may be mirrored, which is off by default.
+Turn it on for flat pieces that may be turned over, e.g. pentominoes in a
+plane. A planar piece in 3D has its mirror image among its rotations anyway.
 """
 struct Puzzle{N}
     target::Shape{N}
@@ -22,7 +21,7 @@ end
 countrange(n::Integer) = Int(n):Int(n)
 countrange(r::AbstractUnitRange{<:Integer}) = Int(first(r)):Int(last(r))
 
-function Puzzle(target::Shape{N}, pieces::AbstractVector{<:Pair}; reflections::Bool = (N == 2)) where {N}
+function Puzzle(target::Shape{N}, pieces::AbstractVector{<:Pair}; reflections::Bool = false) where {N}
     all(p -> first(p) isa Shape{N}, pieces) ||
         throw(ArgumentError("all pieces must be $N-dimensional, like the target"))
     shapes = Shape{N}[first(p) for p in pieces]

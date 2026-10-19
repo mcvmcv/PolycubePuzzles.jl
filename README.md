@@ -72,8 +72,9 @@ Puzzle(target, [pieceA => 1, pieceB => 3, pieceC => 0:2]; reflections = false)
 
 A count is exact (`3`) or a range (`0:2`, for spare pieces). Copies of a piece
 are indistinguishable, so permuting them never yields a "new" solution.
-`reflections` says whether pieces may be mirrored; it defaults to `true` in 2D
-(a tile can be turned over) and `false` otherwise.
+`reflections` says whether pieces may be mirrored. It is off by default; turn
+it on for flat tiles that may be turned over, e.g. the classic pentomino
+puzzles: `Puzzle(box(10, 6), [s => 1 for s in pentominoes()]; reflections = true)`.
 
 The library has `pentominoes()` and `soma()`.
 

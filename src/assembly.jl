@@ -58,10 +58,17 @@ in 3D and y in 2D). At each step the order prefers a piece that
 Among those it takes the lowest piece. If `view`, a vector pointing from the
 puzzle towards the viewer, is given, it instead prefers pieces that would be
 mostly visible from the viewer (not hidden behind placed pieces), and among
-those the one farthest from the viewer, so later pieces go in front;
-`right`, the viewer's rightward direction, then favours pieces on the left.
+those the one farthest back, so later pieces go in front, while still filling
+lower levels before higher ones; `right`, the viewer's rightward direction,
+then favours pieces on the left.
 If no piece rests entirely, it takes the one with the most supported cells.
 """
+# How much a piece's lowest level counts against its back/left position when
+# ordering for a viewer, in cell widths per level. Tuned on 5x5x5 Y-pentacube
+# solutions: 0.5-0.75 keeps lower back layers ahead of towers with the fewest
+# hidden steps; at 1 or more, front floor pieces go first and hide later ones.
+const LEVEL_WEIGHT = 0.6
+
 function assembly_order(sol::Solution{N}; up::Int = N, view = nothing, right = nothing) where {N}
     pls = sol.placements
     isempty(pls) && return Int[]
@@ -100,10 +107,11 @@ function assembly_order(sol::Solution{N}; up::Int = N, view = nothing, right = n
             rests = nsup == length(cells)
             heights = [c[up] for c in cells]
             # lexicographic: rests & droppable, rests, support fraction, mostly visible,
-            # position, low, then index
+            # back/left position blended with lowest level, lowest level, mean height, index
             score = (!(rests && droppable(k)), !rests, -nsup / length(cells),
-                     rests && visibility(k) < 0.6, round(position(cells); digits = 6), minimum(heights),
-                     sum(heights) / length(heights), k)
+                     rests && visibility(k) < 0.6,
+                     round(position(cells) + LEVEL_WEIGHT * minimum(heights); digits = 6),
+                     minimum(heights), sum(heights) / length(heights), k)
             if bestscore === nothing || score < bestscore
                 best, bestscore = k, score
             end

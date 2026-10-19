@@ -79,19 +79,28 @@ end
         @test count_solutions(Puzzle(box(2, 2), [dom => 0:5])) == 2
     end
 
+    @testset "reflections" begin
+        @test !Puzzle(box(3, 3), Shape((1, 1)) => 9).reflections
+        @test !Puzzle(box(3, 3, 3), Shape((1, 1, 1)) => 27).reflections
+        # without turning pieces over, the F pentomino has 4 placements per spot
+        F = Puzzle(box(3, 3), P5.F => 1)
+        @test length(placements(F)) == 4
+        @test length(placements(Puzzle(box(3, 3), P5.F => 1; reflections = true))) == 8
+    end
+
     @testset "pentomino rectangles" begin
         pieces = [s => 1 for s in P5]
         # known solution counts up to symmetry, times the 4 symmetries of a rectangle
-        @test count_solutions(Puzzle(box(20, 3), pieces)) == 2 * 4
-        @test count_solutions(Puzzle(box(15, 4), pieces)) == 368 * 4
+        @test count_solutions(Puzzle(box(20, 3), pieces; reflections = true)) == 2 * 4
+        @test count_solutions(Puzzle(box(15, 4), pieces; reflections = true)) == 368 * 4
     end
 
     @testset "symmetry reduction" begin
         pieces = [s => 1 for s in P5]
-        @test count_solutions(Puzzle(box(20, 3), pieces); symmetry = :all) == 2
-        @test count_solutions(Puzzle(box(15, 4), pieces); symmetry = :all) == 368
+        @test count_solutions(Puzzle(box(20, 3), pieces; reflections = true); symmetry = :all) == 2
+        @test count_solutions(Puzzle(box(15, 4), pieces; reflections = true); symmetry = :all) == 368
         ring = setdiff(box(8, 8), Shape([(x, y) for x in 4:5 for y in 4:5]))
-        @test count_solutions(Puzzle(ring, pieces); symmetry = :all) == 65
+        @test count_solutions(Puzzle(ring, pieces; reflections = true); symmetry = :all) == 65
         S = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
         @test count_solutions(S) == 11520
         @test count_solutions(S; symmetry = :rotations) == 480
@@ -122,7 +131,7 @@ end
         S = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
         @test count_solutions(S; ntasks = 4) == 11520
         @test count_solutions(S; symmetry = :all, ntasks = 4) == 240
-        p = Puzzle(box(15, 4), [s => 1 for s in P5])
+        p = Puzzle(box(15, 4), [s => 1 for s in P5]; reflections = true)
         @test solve(p; ntasks = 4) == solve(p; ntasks = 1)
         @test length(solve(p; ntasks = 4, limit = 10)) == 10
         n = Threads.Atomic{Int}(0)
@@ -172,7 +181,7 @@ end
             all(d -> (o = get(owner, d, k); o == k || col[o] != col[k]), Polyominoes.neighbors(c))
         end
         @test maximum(col) <= 8
-        p2 = solve(Puzzle(box(10, 6), [s => 1 for s in P5]); limit = 1)[1]
+        p2 = solve(Puzzle(box(10, 6), [s => 1 for s in P5]; reflections = true); limit = 1)[1]
         @test sort(assembly_order(p2)) == 1:12
         # with a viewer, every piece rests when placed and the order is a permutation
         view = (-0.7, -0.4, 0.6)
@@ -188,7 +197,7 @@ end
     end
 
     @testset "solutions are valid" begin
-        p = Puzzle(box(20, 3), [s => 1 for s in P5])
+        p = Puzzle(box(20, 3), [s => 1 for s in P5]; reflections = true)
         sols = solve(p)
         @test length(sols) == 8
         for s in sols
