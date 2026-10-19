@@ -55,4 +55,6 @@ plot_solution
 plot_solution!
 plot_steps
 animate_assembly
+explore
+instructions
 ```

@@ -70,5 +70,6 @@ plot_steps(sol; columns = 3)
 
 - [Describing puzzles](@ref): shapes, ASCII art, piece counts and reflections.
 - [Solving](@ref): finding and counting solutions, symmetry, and threads.
-- [Assembly and plots](@ref): building orders, sliding pieces in, and drawing
-  instructions, in flat colours or wood.
+- [Assembly and plots](@ref): building orders, sliding pieces in, drawing
+  instructions in flat colours or wood, exploring them interactively, and
+  printing them as a PDF booklet.

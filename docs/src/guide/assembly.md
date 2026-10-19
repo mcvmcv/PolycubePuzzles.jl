@@ -75,3 +75,30 @@ plot_steps(sol; style = :wood)
 ![Assembly steps in wood](../assets/cube3_slide_steps_wood.png)
 
 Pass `colors` to choose your own colours or wood tones.
+
+## Exploring interactively
+
+[`explore`](@ref) opens a solution in a window where you can step through
+the assembly and turn the view with the mouse. Use an interactive backend:
+
+```julia
+using GLMakie
+explore(sol)                                  # one solution
+explore(solve(p; symmetry = :rotations))      # browse them all
+```
+
+A slider (or the left and right arrow keys) moves through the steps, and the
+line beside it says how each piece goes in. With several solutions, a second
+slider (or the up and down arrow keys) picks one. Toggles switch wood, ghosts,
+slide arrows and muting on and off.
+
+## Printable instructions
+
+[`instructions`](@ref) writes an A4 booklet: a title page with the parts
+list and the finished puzzle, then the numbered steps, six to a page:
+
+```julia
+using CairoMakie
+instructions(sol, "cube.pdf")                     # one PDF
+instructions(sol, "cube.png"; style = :wood)      # cube_1.png, cube_2.png, ...
+```

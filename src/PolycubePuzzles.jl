@@ -17,7 +17,7 @@ export Puzzle, Placement, Solution, placements
 export solve, count_solutions, foreach_solution
 export pentominoes, soma
 export assembly_order, assembly_plan, insertion, isassemblable, Insertion, piece_coloring
-export plot_solution, plot_solution!, plot_steps, animate_assembly
+export plot_solution, plot_solution!, plot_steps, animate_assembly, explore, instructions
 
 include("shapes.jl")
 include("orientations.jl")

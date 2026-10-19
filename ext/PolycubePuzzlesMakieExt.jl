@@ -4,7 +4,8 @@ using PolycubePuzzles
 using PolycubePuzzles: Solution, Placement, Insertion, neighbors, bounds, sightlines, insertion
 using Makie
 
-import PolycubePuzzles: plot_solution, plot_solution!, plot_steps, animate_assembly
+import PolycubePuzzles: plot_solution, plot_solution!, plot_steps, animate_assembly, explore,
+                        instructions, instruction_pages
 
 # Categorical palette in fixed slot order (blue, orange, aqua, yellow, magenta,
 # green, violet, red). Pieces get slots by adjacency colouring, so touching
@@ -260,7 +261,7 @@ function plot_solution!(ax, sol::Solution{3}; step::Integer = length(sol),
                         style::Symbol = :flat, colors = style === :wood ? WOODS : PALETTE,
                         highlight::Bool = step < length(sol), muted::Bool = true,
                         frame::Bool = true, linewidth = style === :wood ? 0.025 : 0.035,
-                        ghost::Bool = true, arrows::Bool = true)
+                        ghost::Bool = true, arrows::Bool = true, cullbackfaces::Bool = true)
     lo, hi = bounds(reduce(vcat, [pl.cells for pl in sol]))
     # fixed limits, so every step (and animation frame) has the same framing
     limits!(ax, lo[1] - 1, hi[1], lo[2] - 1, hi[2], lo[3] - 1, hi[3])
@@ -275,9 +276,10 @@ function plot_solution!(ax, sol::Solution{3}; step::Integer = length(sol),
         owner = Dict(c => k for k in shown for c in sol.placements[k].cells)
         _, _, hiders = sightlines(owner, order[step], o -> true, viewdir(ax))
     end
-    # faces against an opaque piece, or turned away from the viewer, can't be seen
+    # faces against an opaque piece, or turned away from the viewer, can't be
+    # seen (but an interactive view can be turned, so keep those)
     opaque = Set(c for k in shown if !(k in hiders) for c in sol.placements[k].cells)
-    v = ax isa Axis3 ? viewdir(ax) : nothing
+    v = ax isa Axis3 && cullbackfaces ? viewdir(ax) : nothing
     skip(c, d, s) = ntuple(i -> c[i] + (i == d) * s, 3) in opaque ||
                     (v !== nothing && s * v[d] <= 0)
     V, C, F = Point3f[], Makie.RGBAf[], Makie.GLTriangleFace[]
@@ -290,7 +292,7 @@ function plot_solution!(ax, sol::Solution{3}; step::Integer = length(sol),
                    # ghosts are plain: subdivision seams would show through
                    nsub = style === :wood && !(k in hiders) ? 8 : 1)
     end
-    mesh!(ax, V, F; color = C, shading = NoShading)
+    mesh!(ax, V, F; color = C, shading = NoShading, transparency = !isempty(hiders))
     if highlight && arrows
         k = order[step]
         draw_slide!(ax, sol.placements[k].cells, insertion(sol, k, order[1:step-1]), ink)
@@ -403,6 +405,177 @@ function animate_assembly(sol::Solution, filename::AbstractString; order = nothi
         plot_solution!(ax, sol; step = k, order, highlight = k < n, plotkw...)
     end
     filename
+end
+
+# Keywords that only the 3D plot takes.
+dimkw(::Solution{3}; ghost, kw...) = (; ghost, cullbackfaces = false, kw...)
+dimkw(::Solution{2}; ghost, kw...) = (; kw...)
+
+function explore(sols::AbstractVector{<:Solution}; style::Symbol = :flat, size = (900, 820),
+                 azimuth = 1.15π, elevation = 0.18π, kw...)
+    isempty(sols) && throw(ArgumentError("no solutions to explore"))
+    sol1 = first(sols)
+    n = length(sol1)
+    fig = Figure(; size)
+    ax = sol1 isa Solution{3} ? new_axis(fig[1, 1], sol1; azimuth, elevation) : new_axis(fig[1, 1], sol1)
+    controls = GridLayout(fig[2, 1]; tellwidth = false)
+
+    prev = Button(controls[1, 1]; label = "◀", width = 40)
+    stepslider = Slider(controls[1, 2]; range = 0:n, startvalue = n, width = 420)
+    next = Button(controls[1, 3]; label = "▶", width = 40)
+    status = Label(controls[1, 4], ""; halign = :left, width = 320)
+
+    many = length(sols) > 1
+    solslider = many ? Slider(controls[2, 2]; range = 1:length(sols), startvalue = 1, width = 420) : nothing
+    if many
+        Label(controls[2, 1], "Solution")
+        sollabel = Label(controls[2, 3:4], lift(i -> "$i of $(length(sols))", solslider.value);
+                         halign = :left)
+    end
+
+    toggles = GridLayout(controls[3, 1:4])
+    function toggle(col, text, on)
+        t = Toggle(toggles[1, 2col-1]; active = on)
+        Label(toggles[1, 2col], text; halign = :left)
+        t
+    end
+    wood = toggle(1, "wood", style === :wood)
+    ghosts = toggle(2, "ghosts", true)
+    arrows = toggle(3, "arrows", true)
+    muted = toggle(4, "mute earlier pieces", true)
+    reset = Button(toggles[1, 9]; label = "reset view")
+
+    # the assembly order depends on the view it is built for; keep it per solution
+    orders = Dict{Int,Vector{Int}}()
+    order_for(i) = get!(() -> view_order(ax, sols[i]), orders, i)
+    current() = many ? solslider.value[] : 1
+
+    function redraw()
+        i = current()
+        sol = sols[i]
+        k = stepslider.value[]
+        order = order_for(i)
+        empty!(ax)
+        status.text = k == 0 ? "Empty" : k == n ? "Complete: $n pieces" :
+                      step_title(sol, order, k, ax; prefix = "Step $k of $n")
+        plot_solution!(ax, sol; dimkw(sol; step = k, order, highlight = 0 < k < n,
+                                      style = wood.active[] ? :wood : :flat,
+                                      ghost = ghosts.active[], arrows = arrows.active[],
+                                      muted = muted.active[], kw...)...)
+    end
+
+    onany((_...) -> redraw(), stepslider.value, wood.active, ghosts.active, arrows.active, muted.active)
+    many && on(_ -> redraw(), solslider.value)
+    on(_ -> set_close_to!(stepslider, stepslider.value[] - 1), prev.clicks)
+    on(_ -> set_close_to!(stepslider, stepslider.value[] + 1), next.clicks)
+    on(reset.clicks) do _
+        if ax isa Axis3
+            ax.azimuth[] = azimuth
+            ax.elevation[] = elevation
+        end
+    end
+    on(events(fig).keyboardbutton) do event
+        event.action in (Keyboard.press, Keyboard.repeat) || return
+        event.key == Keyboard.left && set_close_to!(stepslider, stepslider.value[] - 1)
+        event.key == Keyboard.right && set_close_to!(stepslider, stepslider.value[] + 1)
+        if many
+            event.key == Keyboard.down && set_close_to!(solslider, solslider.value[] - 1)
+            event.key == Keyboard.up && set_close_to!(solslider, solslider.value[] + 1)
+        end
+    end
+    redraw()
+    fig
+end
+
+explore(sol::Solution; kw...) = explore([sol]; kw...)
+
+# Printable instructions: A4 pages in PDF points (pt_per_unit = 1).
+const A4 = (595, 842)
+
+piece_solution(sol::Solution{N}, t, cells) where {N} =
+    Solution{N}([Placement{N}(t, PolycubePuzzles.normalize(PolycubePuzzles.Shape(cells)).cells)])
+
+function instruction_pages(sol::Solution{N}; title = "Assembly instructions",
+                           style::Symbol = :flat, steps_per_page::Integer = 6,
+                           columns::Integer = 2, pagesize = A4, azimuth = 1.15π,
+                           elevation = 0.18π, kw...) where {N}
+    n = length(sol)
+    axkw = N == 3 ? (; azimuth, elevation) : (;)
+    colors = style === :wood ? WOODS : PALETTE
+    pages = Figure[]
+    npages = 1 + cld(n, steps_per_page)
+    footer(fig, page) = Label(fig[end+1, :], "$page / $npages"; fontsize = 9,
+                              color = :gray40, tellwidth = false)
+
+    # title page: the parts, then the finished puzzle
+    fig = Figure(; size = pagesize, figure_padding = 36)
+    Label(fig[1, 1], title; fontsize = 24, font = :bold, halign = :left, tellwidth = false)
+    types = sort!(unique(pl.piece for pl in sol))
+    counts = Dict(t => count(pl -> pl.piece == t, sol.placements) for t in types)
+    Label(fig[2, 1], "$n pieces, $n steps"; fontsize = 12, halign = :left, tellwidth = false)
+    Label(fig[3, 1], "Pieces"; fontsize = 15, font = :bold, halign = :left, tellwidth = false)
+    parts = GridLayout(fig[4, 1]; tellwidth = false)
+    # small 3D panels: hidden decorations still reserve room unless told not to
+    partkw = N == 3 ? (; axkw..., protrusions = 0) : axkw
+    pcols = min(length(types), 4)
+    for (i, t) in enumerate(types)
+        cell = parts[fld1(i, pcols), mod1(i, pcols)] = GridLayout()
+        cells = first(pl for pl in sol if pl.piece == t).cells
+        ps = piece_solution(sol, t, cells)
+        ax = new_axis(cell[1, 1], ps; partkw...)
+        plot_solution!(ax, ps; colors = [colors[mod1(i, length(colors))]], style,
+                       frame = false, highlight = false, coloring = [1])
+        Label(cell[2, 1], "× $(counts[t])"; fontsize = 14, tellwidth = false)
+    end
+    Label(fig[5, 1], "Finished"; fontsize = 15, font = :bold, halign = :left, tellwidth = false)
+    ax = new_axis(fig[6, 1], sol; axkw...)
+    order = view_order(ax, sol)
+    plot_solution!(ax, sol; order, style, kw...)
+    rowsize!(fig.layout, 4, Relative(0.3))
+    rowsize!(fig.layout, 6, Relative(0.4))
+    footer(fig, 1)
+    push!(pages, fig)
+
+    # the steps, steps_per_page to a page
+    rows = cld(steps_per_page, columns)
+    for (p, ks) in enumerate(Iterators.partition(1:n, steps_per_page))
+        fig = Figure(; size = pagesize, figure_padding = 30)
+        for (j, k) in enumerate(ks)
+            cell = fig[fld1(j, columns), mod1(j, columns)] = GridLayout()
+            Label(cell[1, 1], string(k); fontsize = 22, font = :bold, halign = :left,
+                  tellwidth = false)
+            words = from_words(insertion(sol, order[k], order[1:k-1]), ax)
+            Label(cell[1, 2], isempty(words) ? "" : words; fontsize = 11, halign = :right,
+                  tellwidth = false)
+            sax = new_axis(cell[2, 1:2], sol; axkw...)
+            plot_solution!(sax, sol; step = k, order, highlight = true, style, kw...)
+            rowsize!(cell, 2, Relative(0.88))
+        end
+        # keep panels the same size on a part-filled last page
+        for j in length(ks)+1:steps_per_page
+            Box(fig[fld1(j, columns), mod1(j, columns)]; visible = false)
+        end
+        footer(fig, p + 1)
+        push!(pages, fig)
+    end
+    pages
+end
+
+function instructions(sol::Solution, filename::AbstractString; kw...)
+    pages = instruction_pages(sol; kw...)
+    base, ext = splitext(filename)
+    if lowercase(ext) == ".pdf"
+        isnothing(Base.get_extension(PolycubePuzzles, :PolycubePuzzlesCairoMakieExt)) &&
+            error("writing a PDF needs CairoMakie: run `using CairoMakie` first")
+        PolycubePuzzles.save_pages(filename, pages)
+        return filename
+    end
+    files = String[]
+    for (i, fig) in enumerate(pages)
+        push!(files, "$(base)_$(i)$(ext)")
+        save(files[end], fig)
+    end
+    files
 end
 
 end

@@ -1,4 +1,5 @@
 using PolycubePuzzles
+using CairoMakie
 using Test
 
 const P5 = pentominoes()
@@ -258,5 +259,34 @@ end
         end
         @test length(solve(p; limit = 3)) == 3
         @test occursin("Solution{2} with 12 pieces", repr("text/plain", sols[1]))
+    end
+
+    @testset "plots" begin
+        pieces = [
+            [(1, 3, 1), (2, 3, 1), (3, 3, 1), (3, 2, 1), (1, 3, 2)],
+            [(1, 2, 1), (2, 2, 1), (2, 1, 1), (1, 2, 2)],
+            [(1, 1, 1), (3, 1, 1), (1, 1, 2), (2, 1, 2), (3, 1, 2)],
+            [(2, 2, 2), (3, 2, 2), (3, 3, 2), (2, 2, 3)],
+            [(2, 3, 2), (2, 3, 3), (3, 3, 3), (3, 2, 3), (3, 1, 3)],
+            [(2, 1, 3), (1, 1, 3), (1, 2, 3), (1, 3, 3)],
+        ]
+        sol3 = Solution(Puzzle(box(3, 3, 3), [Shape(c) => 1 for c in pieces]), pieces)
+        sol2 = solve(Puzzle(box(10, 6), [s => 1 for s in P5]); limit = 1)[1]
+        mktempdir() do dir
+            for (name, sol) in (("cube", sol3), ("pent", sol2))
+                @test plot_solution(sol) isa Figure
+                @test plot_steps(sol) isa Figure
+                @test explore(sol) isa Figure
+                pdf = joinpath(dir, "$name.pdf")
+                @test instructions(sol, pdf) == pdf
+                @test startswith(read(pdf, String), "%PDF")
+                npages = 1 + cld(length(sol), 6)
+                pngs = instructions(sol, joinpath(dir, "$name.png"); style = :wood)
+                @test pngs == [joinpath(dir, "$(name)_$i.png") for i in 1:npages]
+                @test all(isfile, pngs)
+            end
+            @test explore([sol3, sol3]) isa Figure
+            @test_throws ArgumentError explore(Solution{3}[])
+        end
     end
 end

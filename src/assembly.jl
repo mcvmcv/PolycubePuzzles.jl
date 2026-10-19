@@ -344,3 +344,46 @@ piece at a time, and return `filename`. Other keywords are as for
 [`plot_solution`](@ref).
 """
 function animate_assembly end
+
+"""
+    explore(sol::Solution; style = :flat, kw...)
+    explore(sols::Vector{<:Solution}; kw...)
+
+An interactive Makie `Figure` for following the assembly of a solution, or
+browsing several. Display it with an interactive backend such as GLMakie
+(`using GLMakie; explore(sol)`), then drag to turn the view.
+
+- A slider (or ◀ ▶, or the left and right arrow keys) moves through the
+  steps; the line beside it says what the step does, e.g. "slide in from the
+  left".
+- With several solutions, a second slider (or the up and down arrow keys)
+  chooses the solution.
+- Toggles switch between flat colours and wood, and turn ghosts, slide arrows
+  and muting of earlier pieces on and off; "reset view" restores the angle.
+
+Other keywords are passed to [`plot_solution!`](@ref).
+"""
+function explore end
+
+"""
+    instructions(sol::Solution, filename; title = "Assembly instructions", style = :flat,
+                 steps_per_page = 6, columns = 2, kw...)
+
+Write printable assembly instructions for `sol` on A4 pages: a title page with
+a parts list (each kind of piece drawn on its own, with how many there are)
+and the finished puzzle, then the steps, `steps_per_page` to a page in
+`columns` columns, each numbered, with a note when a piece must slide in from
+the side.
+
+If `filename` ends in `.pdf` the pages go into one PDF, which needs
+`using CairoMakie`; otherwise each page is saved as its own image, e.g.
+`booklet.png` gives `booklet_1.png`, `booklet_2.png`, .... Returns the file
+name(s). Other keywords are as for [`plot_solution`](@ref).
+"""
+function instructions end
+
+# Internal: the instruction pages as Makie figures (Makie extension).
+function instruction_pages end
+
+# Internal: save figures as the pages of one PDF (CairoMakie extension).
+function save_pages end
