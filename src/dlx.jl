@@ -18,6 +18,7 @@ mutable struct DLX
     C::Vector{Int}          # node -> its column header
     S::Vector{Int}          # header -> number of rows in the column
     row::Vector{Int}        # node -> row index
+    rowfirst::Vector{Int}   # row -> its first node
     lastprimary::Int        # header nodes 2:lastprimary are primary
     rowtype::Vector{Int}    # row -> piece type
     typecol::Vector{Int}    # piece type -> header node
@@ -36,6 +37,7 @@ function DLX(ncells::Int, rows::Vector{Vector{Int}}, rowtype::Vector{Int},
     n = 1 + ncols + sum(length, rows; init = 0) + length(rows)
     L = zeros(Int, n); R = zeros(Int, n); U = zeros(Int, n); D = zeros(Int, n)
     C = zeros(Int, n); S = zeros(Int, n); row = zeros(Int, n)
+    rowfirst = zeros(Int, length(rows))
     lastprimary = ncells + 1
     # root and primary headers form a circular list; secondary headers are self-linked
     for h in 1:lastprimary
@@ -51,6 +53,7 @@ function DLX(ncells::Int, rows::Vector{Vector{Int}}, rowtype::Vector{Int},
     node = ncols + 1
     for (r, cells) in enumerate(rows)
         first = node + 1
+        rowfirst[r] = first
         for col in Iterators.flatten((cells, ncells + rowtype[r]))
             node += 1
             h = col + 1
@@ -63,7 +66,7 @@ function DLX(ncells::Int, rows::Vector{Vector{Int}}, rowtype::Vector{Int},
         L[first] = node; R[node] = first
     end
     typecol = [lastprimary + t for t in 1:ntypes]
-    DLX(L, R, U, D, C, S, row, lastprimary, rowtype, typecol, lo, hi, vol,
+    DLX(L, R, U, D, C, S, row, rowfirst, lastprimary, rowtype, typecol, lo, hi, vol,
         zeros(Int, ntypes), ncells, Int[])
 end
 
@@ -112,11 +115,47 @@ function feasible(X::DLX)
     need <= X.remaining <= cap
 end
 
-# Calls f(X.stack) for each solution; stops early if f returns false.
-# Returns false if stopped early.
-function search!(f, X::DLX)
+# Add row r to the partial solution (as if chosen by the search).
+function select!(X::DLX, r::Int)
+    R, C = X.R, X.C
+    first = X.rowfirst[r]
+    j = first
+    while true
+        C[j] <= X.lastprimary && cover!(X, C[j])
+        j = R[j]
+        j == first && break
+    end
+    t = X.rowtype[r]
+    X.used[t] += 1
+    X.remaining -= X.vol[t]
+    X.used[t] == X.hi[t] && cover!(X, X.typecol[t])
+    push!(X.stack, r)
+    nothing
+end
+
+# Undo select!(X, r); must be called in reverse order of selection.
+function unselect!(X::DLX, r::Int)
+    L, C = X.L, X.C
+    pop!(X.stack)
+    t = X.rowtype[r]
+    X.used[t] == X.hi[t] && uncover!(X, X.typecol[t])
+    X.remaining += X.vol[t]
+    X.used[t] -= 1
+    first = X.rowfirst[r]
+    j = L[first]
+    while true
+        C[j] <= X.lastprimary && uncover!(X, C[j])
+        j == first && break
+        j = L[j]
+    end
+    nothing
+end
+
+# Calls f(X.stack) for each solution, or for each partial solution with
+# `maxdepth` rows; stops early if f returns false. Returns false if stopped early.
+function search!(f, X::DLX, maxdepth::Int = typemax(Int))
     L, R, D, C, S = X.L, X.R, X.D, X.C, X.S
-    if R[1] == 1
+    if R[1] == 1 || length(X.stack) >= maxdepth
         return f(X.stack) !== false
     end
     # choose the cell with fewest candidate placements
@@ -144,7 +183,7 @@ function search!(f, X::DLX)
         full = X.used[t] == X.hi[t]
         full && cover!(X, X.typecol[t])
         push!(X.stack, X.row[r])
-        go = feasible(X) ? search!(f, X) : true
+        go = feasible(X) ? search!(f, X, maxdepth) : true
         pop!(X.stack)
         full && uncover!(X, X.typecol[t])
         X.remaining += X.vol[t]

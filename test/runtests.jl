@@ -7,6 +7,28 @@ XXXX
 .X..
 """
 
+
+# Independent orbit count: enumerate all solutions, then identify those related
+# by a geometric symmetry of the target that maps the solution set to itself.
+function naive_orbits(p::Puzzle{N}, mode) where {N}
+    raw = solve(p; ntasks = 1)
+    label(cells) = minimum(orientations(normalize(Shape(cells)); reflections = p.reflections))
+    key(sol) = sort([(label(pl.cells), sort(pl.cells)) for pl in sol])
+    keys = Set(key(s) for s in raw)
+    t0 = normalize(p.target)
+    gs = []
+    for (perm, signs) in Polyominoes.symmetries(N; reflections = true)
+        mode === :rotations && Polyominoes.parity(perm) * prod(signs) == -1 && continue
+        img = Shape([Polyominoes.transform(c, perm, signs) for c in p.target.cells])
+        normalize(img) == t0 || continue
+        off = first(Polyominoes.bounds(p.target.cells)) .- first(Polyominoes.bounds(img.cells))
+        g(c) = Polyominoes.transform(c, perm, signs) .+ off
+        image(sol) = sort([(label(map(g, pl.cells)), sort(map(g, pl.cells))) for pl in sol])
+        all(s -> image(s) in keys, raw) && push!(gs, image)
+    end
+    count(s -> all(image -> key(s) <= image(s), gs), raw)
+end
+
 @testset "Polyominoes" begin
     @testset "shapes" begin
         @test Y == Shape((1, 2), (2, 2), (3, 2), (4, 2), (2, 1))
@@ -62,6 +84,51 @@ XXXX
         # known solution counts up to symmetry, times the 4 symmetries of a rectangle
         @test count_solutions(Puzzle(box(20, 3), pieces)) == 2 * 4
         @test count_solutions(Puzzle(box(15, 4), pieces)) == 368 * 4
+    end
+
+    @testset "symmetry reduction" begin
+        pieces = [s => 1 for s in P5]
+        @test count_solutions(Puzzle(box(20, 3), pieces); symmetry = :all) == 2
+        @test count_solutions(Puzzle(box(15, 4), pieces); symmetry = :all) == 368
+        ring = setdiff(box(8, 8), Shape([(x, y) for x in 4:5 for y in 4:5]))
+        @test count_solutions(Puzzle(ring, pieces); symmetry = :all) == 65
+        S = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
+        @test count_solutions(S) == 11520
+        @test count_solutions(S; symmetry = :rotations) == 480
+        @test count_solutions(S; symmetry = :all) == 240  # mirror swaps the A/B screws
+        @test_throws ArgumentError count_solutions(S; symmetry = :bogus)
+        @test_throws ArgumentError Puzzle(box(3, 3, 3), Shape((1, 1)) => 1)
+
+        mono, dom = Shape((1, 1)), Shape((1, 1), (2, 1))
+        L3, I3 = shape"X.\nXX", shape"XXX"
+        V3 = Shape((1, 1, 1), (2, 1, 1), (1, 2, 1))
+        A, B = soma().A, soma().B
+        dom3 = Shape((1, 1, 1), (2, 1, 1))
+        cases = [
+            Puzzle(box(2, 2, 2), Shape((1, 1, 1), (2, 1, 1)) => 4),
+            Puzzle(box(4, 4), [mono => 0:4, dom => 0:8]),
+            Puzzle(box(3, 4), [L3 => 0:4, I3 => 1:2]),
+            Puzzle(box(3, 3), [L3 => 2, I3 => 0:1, mono => 0:3]),
+            Puzzle(shape"XXX\nX.X\nXXX", [L3 => 0:2, dom => 0:4, mono => 0:1]),
+            Puzzle(box(2, 2, 3), [V3 => 2, A => 0:1, B => 0:1, dom3 => 0:6]; reflections = false),
+            Puzzle(box(2, 3, 2), [A => 1, B => 1, V3 => 0:4]),
+        ]
+        for p in cases, mode in (:rotations, :all)
+            @test count_solutions(p; symmetry = mode) == naive_orbits(p, mode)
+        end
+    end
+
+    @testset "parallel search" begin
+        S = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
+        @test count_solutions(S; ntasks = 4) == 11520
+        @test count_solutions(S; symmetry = :all, ntasks = 4) == 240
+        p = Puzzle(box(15, 4), [s => 1 for s in P5])
+        @test solve(p; ntasks = 4) == solve(p; ntasks = 1)
+        @test length(solve(p; ntasks = 4, limit = 10)) == 10
+        n = Threads.Atomic{Int}(0)
+        @test foreach_solution(_ -> (Threads.atomic_add!(n, 1); true), S; ntasks = 4)
+        @test n[] == 11520
+        @test !foreach_solution(_ -> false, S; ntasks = 4)
     end
 
     @testset "solutions are valid" begin

@@ -13,12 +13,13 @@ export Shape, @shape_str, parse_shape, box, normalize, ncells
 export orientations
 export Puzzle, Placement, Solution, placements
 export solve, count_solutions, foreach_solution
-export pentominoes
+export pentominoes, soma
 
 include("shapes.jl")
 include("orientations.jl")
 include("puzzle.jl")
 include("dlx.jl")
+include("symmetry.jl")
 include("solve.jl")
 include("library.jl")
 

@@ -23,6 +23,8 @@ countrange(n::Integer) = Int(n):Int(n)
 countrange(r::AbstractUnitRange{<:Integer}) = Int(first(r)):Int(last(r))
 
 function Puzzle(target::Shape{N}, pieces::AbstractVector{<:Pair}; reflections::Bool = (N == 2)) where {N}
+    all(p -> first(p) isa Shape{N}, pieces) ||
+        throw(ArgumentError("all pieces must be $N-dimensional, like the target"))
     shapes = Shape{N}[first(p) for p in pieces]
     counts = UnitRange{Int}[countrange(last(p)) for p in pieces]
     all(r -> first(r) >= 0 && !isempty(r), counts) ||
@@ -86,6 +88,11 @@ target. Displays as ASCII art (one letter per placed piece) in 2D and 3D.
 struct Solution{N}
     placements::Vector{Placement{N}}
 end
+
+Base.:(==)(a::Placement, b::Placement) = a.piece == b.piece && a.cells == b.cells
+Base.hash(p::Placement, h::UInt) = hash(p.cells, hash(p.piece, h))
+Base.:(==)(a::Solution, b::Solution) = a.placements == b.placements
+Base.hash(s::Solution, h::UInt) = hash(s.placements, h)
 
 Base.length(s::Solution) = length(s.placements)
 Base.iterate(s::Solution, st...) = iterate(s.placements, st...)
