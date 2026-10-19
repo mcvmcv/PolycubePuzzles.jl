@@ -14,6 +14,8 @@ export orientations
 export Puzzle, Placement, Solution, placements
 export solve, count_solutions, foreach_solution
 export pentominoes, soma
+export assembly_order, piece_coloring
+export plot_solution, plot_solution!, plot_steps, animate_assembly
 
 include("shapes.jl")
 include("orientations.jl")
@@ -22,5 +24,6 @@ include("dlx.jl")
 include("symmetry.jl")
 include("solve.jl")
 include("library.jl")
+include("assembly.jl")
 
 end

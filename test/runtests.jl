@@ -131,6 +131,30 @@ end
         @test !foreach_solution(_ -> false, S; ntasks = 4)
     end
 
+    @testset "assembly" begin
+        Y3 = Shape([(c..., 1) for c in Y])
+        sol = solve(Puzzle(box(5, 5, 5), Y3 => 25); limit = 1)[1]
+        order = assembly_order(sol)
+        @test sort(order) == 1:25
+        # every piece rests on the floor, earlier pieces, or itself when placed
+        placed = Set{NTuple{3,Int}}()
+        for k in order
+            cells = sol.placements[k].cells
+            own = Set(cells)
+            @test all(c -> c[3] == 1 || (c .- (0, 0, 1)) in placed || (c .- (0, 0, 1)) in own, cells)
+            union!(placed, cells)
+        end
+        col = piece_coloring(sol)
+        owner = Dict(c => k for (k, pl) in enumerate(sol) for c in pl.cells)
+        @test all(owner) do (c, k)
+            all(d -> (o = get(owner, d, k); o == k || col[o] != col[k]), Polyominoes.neighbors(c))
+        end
+        @test maximum(col) <= 8
+        p2 = solve(Puzzle(box(10, 6), [s => 1 for s in P5]); limit = 1)[1]
+        @test sort(assembly_order(p2)) == 1:12
+        @test maximum(piece_coloring(p2)) <= 4
+    end
+
     @testset "solutions are valid" begin
         p = Puzzle(box(20, 3), [s => 1 for s in P5])
         sols = solve(p)

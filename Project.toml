@@ -3,7 +3,14 @@ uuid = "e04baceb-a2ad-4aa7-a905-7f7047ff2a5a"
 authors = ["mcveagh <mcveagh@gmail.com>"]
 version = "0.1.0"
 
+[weakdeps]
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+
+[extensions]
+PolyominoesMakieExt = "Makie"
+
 [compat]
+Makie = "0.24"
 julia = "1.10"
 
 [extras]
