@@ -41,12 +41,12 @@ end
 transform(c::NTuple{N,Int}, perm, signs) where {N} = ntuple(i -> signs[i] * c[perm[i]], N)
 
 """
-    orientations(s::Shape; reflections::Bool)
+    orientations(s::Shape; reflections = false)
 
 The distinct orientations of `s`, each normalized (see [`normalize`](@ref)).
 With `reflections = true` mirror images are included.
 """
-function orientations(s::Shape{N}; reflections::Bool) where {N}
+function orientations(s::Shape{N}; reflections::Bool = false) where {N}
     out = Set{Shape{N}}()
     for (perm, signs) in symmetries(N; reflections)
         push!(out, normalize(Shape{N}([transform(c, perm, signs) for c in s.cells])))

@@ -162,6 +162,34 @@ end
         @test_throws ArgumentError Solution(p, bad(q -> q[1] = [(1, 1, 1)]))      # not a piece
     end
 
+    @testset "sliding into place" begin
+        # 2D, y up, in a 4x3 box:  row 3  . . . E
+        #                          row 2  A A . E
+        #                          row 1  A B . D
+        A = Placement{2}(1, [(1, 1), (1, 2), (2, 2)])
+        B = Placement{2}(2, [(2, 1)])
+        D = Placement{2}(3, [(4, 1)])
+        E = Placement{2}(4, [(4, 2), (4, 3)])
+        sol = Solution{2}([A, B, D, E])
+        @test insertion(sol, 2, Int[]) == Insertion{2}(:drop, [(0, -3)])
+        @test insertion(sol, 2, [1]) == Insertion{2}(:slide, [(-3, 0)])
+        # under A's overhang with D and E in the way: down the free column, then left
+        @test insertion(sol, 2, [1, 3, 4]) == Insertion{2}(:path, [(0, -3), (-1, 0)])
+        # walled in on every side
+        walled = Solution{2}([A, B, Placement{2}(3, [(3, 1)]), Placement{2}(4, [(3, 2)])])
+        @test insertion(walled, 2, [1, 3, 4]).kind == :blocked
+        @test isassemblable(walled)                                 # B goes in first
+        @test first(assembly_order(walled)) == 2 || assembly_plan(walled)[1].kind != :blocked
+        @test all(ins -> ins.kind != :blocked, assembly_plan(walled))
+
+        Y3 = Shape([(c..., 1) for c in Y])
+        for sol in solve(Puzzle(box(5, 5, 5), Y3 => 25); limit = 3)
+            @test isassemblable(sol)
+            plan = assembly_plan(sol; order = assembly_order(sol; view = (-0.7, -0.4, 0.6)))
+            @test all(ins -> ins.kind != :blocked, plan)
+        end
+    end
+
     @testset "assembly" begin
         Y3 = Shape([(c..., 1) for c in Y])
         sol = solve(Puzzle(box(5, 5, 5), Y3 => 25); limit = 1)[1]
