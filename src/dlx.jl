@@ -202,3 +202,13 @@ function search!(f, X::DLX, maxdepth::Int = typemax(Int))
     uncover!(X, c)
     true
 end
+
+# Search the subtree below the partial solution `prefix` (row indices). X must
+# not be shared with a concurrent search.
+function dlx_from!(f, X::DLX, prefix, maxdepth::Int = typemax(Int))
+    feasible(X) || return true
+    foreach(r -> select!(X, r), prefix)
+    go = feasible(X) ? search!(f, X, maxdepth) : true
+    foreach(r -> unselect!(X, r), Iterators.reverse(prefix))
+    go
+end

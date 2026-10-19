@@ -127,6 +127,29 @@ end
         end
     end
 
+    @testset "both engines" begin
+        mono, dom = Shape((1, 1)), Shape((1, 1), (2, 1))
+        S = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
+        P20 = Puzzle(box(20, 3), [s => 1 for s in P5]; reflections = true)
+        V3 = Shape((1, 1, 1), (2, 1, 1), (1, 2, 1))
+        for engine in (:dlx, :bitboard)
+            @test count_solutions(P20; engine, ntasks = 1) == 8
+            @test count_solutions(P20; engine, symmetry = :all, ntasks = 4) == 2
+            @test count_solutions(S; engine, ntasks = 4) == 11520
+            @test count_solutions(S; engine, symmetry = :all) == 240
+            @test count_solutions(Puzzle(box(3, 1), [mono => 0:3, dom => 0:3]); engine) == 3
+            @test count_solutions(Puzzle(box(2, 2), [dom => 0:5]); engine) == 2
+            @test count_solutions(Puzzle(box(2, 10), dom => 10); engine) == 89
+            p = Puzzle(box(2, 3, 2), [soma().A => 1, soma().B => 1, V3 => 0:4])
+            @test count_solutions(p; engine, symmetry = :all) == naive_orbits(p, :all)
+            @test solve(P20; engine, ntasks = 4) == solve(P20; engine = :dlx, ntasks = 1)
+        end
+        @test_throws ArgumentError count_solutions(S; engine = :bogus)
+        # a 70-cell target needs two 64-bit words per bitboard
+        @test count_solutions(Puzzle(box(35, 2), dom => 35); engine = :bitboard) ==
+              count_solutions(Puzzle(box(35, 2), dom => 35); engine = :dlx)
+    end
+
     @testset "parallel search" begin
         S = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
         @test count_solutions(S; ntasks = 4) == 11520

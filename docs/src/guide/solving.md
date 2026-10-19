@@ -60,6 +60,21 @@ order of the results doesn't depend on the number of tasks.
 ## How it works
 
 Each puzzle becomes an *exact cover* problem: choose placements of pieces so
-that every target cell is covered exactly once. It is solved with Knuth's
-dancing links (Algorithm X). Instead of one constraint per copy of a piece,
-each piece type has a counter, so identical copies are never told apart.
+that every target cell is covered exactly once. Instead of one constraint per
+copy of a piece, each piece type has a counter, so identical copies are never
+told apart. There are two search engines:
+
+- **Bitboard**: the filled cells are a bitset and every placement a
+  precomputed mask. The search always fills the first empty cell, working
+  along the target's shortest direction first, so each step is just a couple
+  of bitwise operations. This is fastest for most flat puzzles: all 2339
+  pentomino solutions of the 10×6 rectangle take about 1.5 s.
+- **Dancing links** (Knuth's Algorithm X): always fills the cell with the
+  fewest ways left to fill it. Each step costs more, but the search can be far
+  smaller. For the 5×5×5 cube of Y pentacubes it is hundreds of times faster
+  than the bitboard search.
+
+By default (`engine = :auto`) both are estimated with Knuth's random-probe
+method, a few hundred random walks down each search tree, which takes a few
+hundredths of a second, and the faster one is used. Pass `engine = :dlx` or
+`engine = :bitboard` to choose.

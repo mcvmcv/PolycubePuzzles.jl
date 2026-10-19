@@ -9,6 +9,8 @@ distinguished (no duplicate solutions from permuting copies).
 """
 module PolycubePuzzles
 
+using Random: Xoshiro
+
 export Shape, @shape_str, parse_shape, box, normalize, ncells
 export orientations
 export Puzzle, Placement, Solution, placements
@@ -21,6 +23,8 @@ include("shapes.jl")
 include("orientations.jl")
 include("puzzle.jl")
 include("dlx.jl")
+include("bitsearch.jl")
+include("estimate.jl")
 include("symmetry.jl")
 include("solve.jl")
 include("library.jl")
