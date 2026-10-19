@@ -30,6 +30,11 @@ The rectangular box `1:dims[1] × 1:dims[2] × ...`.
 """
 box(dims::Integer...) = Shape{length(dims)}(vec([Tuple(I) for I in CartesianIndices(dims)]))
 
+"""
+    ncells(s::Shape)
+
+The number of cells in `s`.
+"""
 ncells(s::Shape) = length(s.cells)
 Base.length(s::Shape) = length(s.cells)
 Base.iterate(s::Shape, st...) = iterate(s.cells, st...)

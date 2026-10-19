@@ -1,8 +1,15 @@
 # Polyominoes.jl
 
+[![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://mcvmcv.github.io/Polyominoes.jl/dev/)
+[![CI](https://github.com/mcvmcv/Polyominoes.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/mcvmcv/Polyominoes.jl/actions/workflows/CI.yml)
+
 Solve packing puzzles in any dimension: fill a target region with a given
 multiset of pieces (polyominoes, polycubes, ...), enumerate all solutions,
 count them up to symmetry, and plot step-by-step assembly instructions.
+See the [documentation](https://mcvmcv.github.io/Polyominoes.jl/dev/) for a
+full guide.
+
+![The 5×5×5 cube in wood](docs/src/assets/y5_wood.png)
 
 ```julia
 using Polyominoes
@@ -45,7 +52,7 @@ using CairoMakie
 plot_steps(sol; columns = 3)
 ```
 
-![Assembly steps for the 3×3×3 cube](docs/images/cube3_steps.png)
+![Assembly steps for the 3×3×3 cube](docs/src/assets/cube3_steps.png)
 
 Four of the pieces differ from their mirror images and none of their mirror
 images is in the set, so a mirrored solution can't be built:
@@ -101,11 +108,14 @@ in place of one column per copy.
 ## Assembly instructions and plots
 
 `assembly_order(sol)` orders the pieces bottom-up so each one rests on the floor
-or on pieces already placed, preferring pieces that can be lowered straight in.
-Given a viewing direction (`view`, and optionally the viewer's `right`), it
-builds from the back and left, preferring pieces that would be visible, so
-each new piece lands in front of what is already there. `piece_coloring(sol)`
-colours pieces so touching pieces differ.
+or on pieces already placed. Every piece can be slid into place when its turn
+comes, and the rest can still be added afterwards, whenever the solution can be
+built that way at all: `insertion` and `assembly_plan` say how each piece goes
+in (dropped, slid in from one side, or along a route of slides), and
+`isassemblable` says whether a solution can be built one piece at a time. Given
+a viewing direction, the order builds from the back and left, preferring
+pieces that will be visible. `piece_coloring(sol)` colours pieces so touching
+pieces differ.
 
 Plotting is a package extension, loaded with any Makie backend:
 
@@ -113,17 +123,18 @@ Plotting is a package extension, loaded with any Makie backend:
 using CairoMakie                          # or GLMakie for interactive 3D
 plot_solution(sol)                        # the finished puzzle
 plot_steps(sol)                           # one numbered panel per step
+plot_steps(sol; style = :wood)            # ... in wood
 animate_assembly(sol, "assembly.gif")     # one frame per step
 ```
 
-In 3D the plots order the pieces for their own viewpoint. Each step shows the
-piece just placed in colour with a heavy outline and the earlier pieces muted;
-any placed piece that would hide the new one is drawn as a faint ghost, so
-pieces that go inside the shape stay visible. Keywords: `azimuth`, `elevation`
-(the 3D view), `order`, `colors`, `muted`, `ghost`, `frame`.
+Each step shows the piece just placed with a heavy outline and the earlier
+pieces muted; any placed piece that would hide the new one is drawn as a faint
+ghost, and a piece that must slide in from the side gets an arrow and a note
+in the step title. Keywords: `style` (`:flat` or `:wood`), `colors`,
+`azimuth`, `elevation`, `order`, `muted`, `ghost`, `arrows`, `frame`.
 
 The 25 Y pentacubes in the 5×5×5 cube:
 
-![Assembly steps for the 5×5×5 cube](docs/images/y5_steps.png)
+![Assembly steps for the 5×5×5 cube](docs/src/assets/y5_steps.png)
 
-The figures are made by `examples/readme_figures.jl`.
+The figures are made by `examples/figures.jl`.
