@@ -6,20 +6,63 @@ neighbors(c::NTuple{N,Int}) where {N} =
     (ntuple(i -> c[i] + (i == d) * s, N) for d in 1:N for s in (-1, 1))
 
 """
-    assembly_order(sol::Solution; up = N)
+    sightlines(owner, k, isplaced, view) -> (nfaces, nvisible, occluders)
+
+For piece `k` in a cell => piece map `owner`, look along `view` (pointing
+towards the viewer) from the centre of each of its faces that faces the
+viewer. Returns the number of such faces, how many are not hidden by a placed
+piece (`isplaced(o)`), and the set of placed pieces hiding them.
+"""
+function sightlines(owner::Dict{NTuple{N,Int},Int}, k::Int, isplaced, view) where {N}
+    v = Float64.(Tuple(view)) ./ sqrt(sum(abs2, view))
+    lo, hi = bounds(collect(keys(owner)))
+    reach = 2 * sum(hi .- lo .+ 1)
+    occluders = Set{Int}()
+    nface = nseen = 0
+    for (c, o) in owner
+        o == k || continue
+        for d in 1:N, s in (-1, 1)
+            s * v[d] > 0 || continue
+            # skip faces in contact with the piece itself or a placed piece
+            nb = get(owner, ntuple(i -> c[i] + (i == d) * s, N), 0)
+            (nb == k || (nb != 0 && isplaced(nb))) && continue
+            nface += 1
+            # march from the face centre towards the viewer
+            p = ntuple(i -> c[i] - 0.5 + (i == d) * 0.5 * s, N)
+            hidden = false
+            for t in 0.05:0.1:reach
+                q = ntuple(i -> ceil(Int, p[i] + t * v[i]), N)
+                any(i -> !(lo[i] <= q[i] <= hi[i]), 1:N) && break
+                o = get(owner, q, 0)
+                if o != 0 && o != k && isplaced(o)
+                    hidden = true
+                    push!(occluders, o)
+                end
+            end
+            nseen += !hidden
+        end
+    end
+    nface, nseen, occluders
+end
+
+"""
+    assembly_order(sol::Solution; up = N, view = nothing, right = nothing)
 
 An order in which to place the pieces of `sol` when building it by hand, as a
 permutation of `1:length(sol)`. Axis `up` points up (default: the last axis, z
-in 3D and y in 2D). The pieces are added bottom-up. At each step the order
-prefers a piece that
+in 3D and y in 2D). At each step the order prefers a piece that
 
 1. rests entirely on the floor, on placed pieces, or on itself, and
-2. can be lowered straight down without hitting a placed piece,
+2. can be lowered straight down without hitting a placed piece.
 
-and among those it takes the lowest. If no piece rests entirely, it takes the
-one with the most supported cells.
+Among those it takes the lowest piece. If `view`, a vector pointing from the
+puzzle towards the viewer, is given, it instead prefers pieces that would be
+mostly visible from the viewer (not hidden behind placed pieces), and among
+those the one farthest from the viewer, so later pieces go in front;
+`right`, the viewer's rightward direction, then favours pieces on the left.
+If no piece rests entirely, it takes the one with the most supported cells.
 """
-function assembly_order(sol::Solution{N}; up::Int = N) where {N}
+function assembly_order(sol::Solution{N}; up::Int = N, view = nothing, right = nothing) where {N}
     pls = sol.placements
     isempty(pls) && return Int[]
     owner = Dict(c => k for (k, pl) in enumerate(pls) for c in pl.cells)
@@ -39,6 +82,14 @@ function assembly_order(sol::Solution{N}; up::Int = N) where {N}
         end
         true
     end
+    function visibility(k)
+        view === nothing && return 1.0
+        nface, nseen, _ = sightlines(owner, k, o -> placed[o], view)
+        nface == 0 ? 1.0 : nseen / nface
+    end
+    along(v, cells) = v === nothing ? 0.0 : sum(c -> sum(c .* v), cells) / length(cells)
+    # depth toward the viewer, with leftness as a lesser tie-breaker
+    position(cells) = along(view, cells) + 0.35 * along(right, cells)
     order = Int[]
     for _ in eachindex(pls)
         best, bestscore = 0, nothing
@@ -48,9 +99,11 @@ function assembly_order(sol::Solution{N}; up::Int = N) where {N}
             nsup = count(c -> supported(k, c), cells)
             rests = nsup == length(cells)
             heights = [c[up] for c in cells]
-            # lexicographic: rests & droppable, rests, support fraction, low, then index
+            # lexicographic: rests & droppable, rests, support fraction, mostly visible,
+            # position, low, then index
             score = (!(rests && droppable(k)), !rests, -nsup / length(cells),
-                     minimum(heights), sum(heights) / length(heights), k)
+                     rests && visibility(k) < 0.6, round(position(cells); digits = 6), minimum(heights),
+                     sum(heights) / length(heights), k)
             if bestscore === nothing || score < bestscore
                 best, bestscore = k, score
             end

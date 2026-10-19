@@ -19,6 +19,38 @@ count_solutions(p)                           # 60672
 count_solutions(p; symmetry = :all)          # 1264 up to rotation and reflection
 ```
 
+## Example: a 3×3×3 cube from six pieces
+
+Give each piece as the cells it occupies in a known solution. The pieces'
+shapes come from those cells, and `Solution` checks that they really solve the
+puzzle (no overlaps, gaps, or cells outside the cube):
+
+```julia
+using Polyominoes
+
+pieces = [
+    [(1,3,1), (2,3,1), (3,3,1), (3,2,1), (1,3,2)],
+    [(1,2,1), (2,2,1), (2,1,1), (1,2,2)],
+    [(1,1,1), (3,1,1), (1,1,2), (2,1,2), (3,1,2)],
+    [(2,2,2), (3,2,2), (3,3,2), (2,2,3)],
+    [(2,3,2), (2,3,3), (3,3,3), (3,2,3), (3,1,3)],
+    [(2,1,3), (1,1,3), (1,2,3), (1,3,3)],
+]
+p = Puzzle(box(3, 3, 3), [Shape(c) => 1 for c in pieces])
+
+count_solutions(p; symmetry = :rotations)   # 24 different solutions
+sol = Solution(p, pieces)                   # the one above
+
+using CairoMakie
+plot_steps(sol; columns = 3)
+```
+
+![Assembly steps for the 3×3×3 cube](docs/images/cube3_steps.png)
+
+Four of the pieces differ from their mirror images and none of their mirror
+images is in the set, so a mirrored solution can't be built:
+`symmetry = :all` also gives 24.
+
 ## Describing puzzles
 
 **Shapes** are finite sets of integer cells, `Shape{N}`, 1-based:
@@ -69,18 +101,28 @@ in place of one column per copy.
 
 `assembly_order(sol)` orders the pieces bottom-up so each one rests on the floor
 or on pieces already placed, preferring pieces that can be lowered straight in.
-`piece_coloring(sol)` colours pieces so touching pieces differ.
+Given a viewing direction (`view`, and optionally the viewer's `right`), it
+builds from the back and left, preferring pieces that would be visible, so
+each new piece lands in front of what is already there. `piece_coloring(sol)`
+colours pieces so touching pieces differ.
 
 Plotting is a package extension, loaded with any Makie backend:
 
 ```julia
 using CairoMakie                          # or GLMakie for interactive 3D
-sol = solve(p; limit = 1)[1]
 plot_solution(sol)                        # the finished puzzle
 plot_steps(sol)                           # one numbered panel per step
 animate_assembly(sol, "assembly.gif")     # one frame per step
 ```
 
-Each step shows the piece just placed in colour with a heavy outline, the
-earlier pieces muted, and a frame of the final shape for reference. Keywords:
-`azimuth`, `elevation` (3D view), `order`, `colors`, `muted`, `frame`.
+In 3D the plots order the pieces for their own viewpoint. Each step shows the
+piece just placed in colour with a heavy outline and the earlier pieces muted;
+any placed piece that would hide the new one is drawn as a faint ghost, so
+pieces that go inside the shape stay visible. Keywords: `azimuth`, `elevation`
+(the 3D view), `order`, `colors`, `muted`, `ghost`, `frame`.
+
+The 25 Y pentacubes in the 5×5×5 cube:
+
+![Assembly steps for the 5×5×5 cube](docs/images/y5_steps.png)
+
+The figures are made by `examples/readme_figures.jl`.

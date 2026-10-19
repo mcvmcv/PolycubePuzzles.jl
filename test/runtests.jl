@@ -131,6 +131,28 @@ end
         @test !foreach_solution(_ -> false, S; ntasks = 4)
     end
 
+    @testset "solutions given by hand" begin
+        pieces = [
+            [(1, 3, 1), (2, 3, 1), (3, 3, 1), (3, 2, 1), (1, 3, 2)],
+            [(1, 2, 1), (2, 2, 1), (2, 1, 1), (1, 2, 2)],
+            [(1, 1, 1), (3, 1, 1), (1, 1, 2), (2, 1, 2), (3, 1, 2)],
+            [(2, 2, 2), (3, 2, 2), (3, 3, 2), (2, 2, 3)],
+            [(2, 3, 2), (2, 3, 3), (3, 3, 3), (3, 2, 3), (3, 1, 3)],
+            [(2, 1, 3), (1, 1, 3), (1, 2, 3), (1, 3, 3)],
+        ]
+        p = Puzzle(box(3, 3, 3), [Shape(c) => 1 for c in pieces])
+        sol = Solution(p, pieces)
+        @test length(sol) == 6
+        @test sol in solve(p)
+        @test count_solutions(p; symmetry = :rotations) == 24
+        bad(f) = (q = deepcopy(pieces); f(q); q)
+        @test_throws ArgumentError Solution(p, bad(q -> q[2][3] = (1, 2, 1)))     # repeated cell
+        @test_throws ArgumentError Solution(p, bad(q -> q[5][1] = (2, 2, 3)))     # overlap
+        @test_throws ArgumentError Solution(p, bad(q -> q[1][1] = (1, 3, 4)))     # outside
+        @test_throws ArgumentError Solution(p, bad(q -> pop!(q)))                 # gap
+        @test_throws ArgumentError Solution(p, bad(q -> q[1] = [(1, 1, 1)]))      # not a piece
+    end
+
     @testset "assembly" begin
         Y3 = Shape([(c..., 1) for c in Y])
         sol = solve(Puzzle(box(5, 5, 5), Y3 => 25); limit = 1)[1]
@@ -152,6 +174,16 @@ end
         @test maximum(col) <= 8
         p2 = solve(Puzzle(box(10, 6), [s => 1 for s in P5]); limit = 1)[1]
         @test sort(assembly_order(p2)) == 1:12
+        # with a viewer, every piece rests when placed and the order is a permutation
+        view = (-0.7, -0.4, 0.6)
+        vorder = assembly_order(sol; view, right = (0.4, -0.9, 0.0))
+        @test sort(vorder) == 1:25
+        placed = Set{NTuple{3,Int}}()
+        for k in vorder
+            cells = sol.placements[k].cells
+            @test all(c -> c[3] == 1 || (c .- (0, 0, 1)) in placed || (c .- (0, 0, 1)) in cells, cells)
+            union!(placed, cells)
+        end
         @test maximum(piece_coloring(p2)) <= 4
     end
 

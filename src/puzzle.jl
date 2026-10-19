@@ -89,10 +89,52 @@ struct Solution{N}
     placements::Vector{Placement{N}}
 end
 
+"""
+    Solution(p::Puzzle, pieces)
+
+Build a solution of `p` from pieces given in place, each a `Shape` or a vector
+of cells, and check it: each piece must be an allowed orientation of one of
+the puzzle's pieces, lie inside the target and not overlap the others, the
+pieces must cover the target, and the piece counts must be within bounds.
+Throws an `ArgumentError` saying what is wrong otherwise.
+"""
+function Solution(p::Puzzle{N}, pieces::AbstractVector) where {N}
+    forms = [orientations(s; reflections = p.reflections) for s in p.pieces]
+    used = zeros(Int, length(p.pieces))
+    covered = Set{NTuple{N,Int}}()
+    pls = Placement{N}[]
+    for (i, x) in enumerate(pieces)
+        s = x isa Shape ? x : Shape{N}(x)
+        x isa Shape || length(s) == length(x) ||
+            throw(ArgumentError("piece $i lists a cell more than once"))
+        n = normalize(s)
+        t = findfirst(t -> n in forms[t] && used[t] < last(p.counts[t]), eachindex(forms))
+        t === nothing && throw(ArgumentError(
+            any(f -> n in f, forms) ? "piece $i is used more times than allowed" :
+            "piece $i is not an allowed orientation of any of the puzzle's pieces"))
+        for c in s.cells
+            c in p.target || throw(ArgumentError("piece $i has cell $c outside the target"))
+            c in covered && throw(ArgumentError("piece $i overlaps another piece at $c"))
+            push!(covered, c)
+        end
+        used[t] += 1
+        push!(pls, Placement{N}(t, s.cells))
+    end
+    missing = [c for c in p.target.cells if !(c in covered)]
+    isempty(missing) || throw(ArgumentError("cells not covered: $(join(missing, ", "))"))
+    for t in eachindex(used)
+        used[t] in p.counts[t] ||
+            throw(ArgumentError("piece type $t is used $(used[t]) times, needs $(p.counts[t])"))
+    end
+    Solution{N}(pls)
+end
+
 Base.:(==)(a::Placement, b::Placement) = a.piece == b.piece && a.cells == b.cells
 Base.hash(p::Placement, h::UInt) = hash(p.cells, hash(p.piece, h))
-Base.:(==)(a::Solution, b::Solution) = a.placements == b.placements
-Base.hash(s::Solution, h::UInt) = hash(s.placements, h)
+# Solutions are equal when they place the same pieces in the same cells, in any order
+canonical(s::Solution) = sort([(pl.piece, pl.cells) for pl in s.placements])
+Base.:(==)(a::Solution, b::Solution) = canonical(a) == canonical(b)
+Base.hash(s::Solution, h::UInt) = hash(canonical(s), hash(:Solution, h))
 
 Base.length(s::Solution) = length(s.placements)
 Base.iterate(s::Solution, st...) = iterate(s.placements, st...)

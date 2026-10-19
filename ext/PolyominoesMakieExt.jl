@@ -1,7 +1,7 @@
 module PolyominoesMakieExt
 
 using Polyominoes
-using Polyominoes: Solution, Placement, neighbors, bounds
+using Polyominoes: Solution, Placement, neighbors, bounds, sightlines
 using Makie
 
 import Polyominoes: plot_solution, plot_solution!, plot_steps, animate_assembly
@@ -53,7 +53,7 @@ shade(c, f) = Makie.RGBf(f * Makie.red(c), f * Makie.green(c), f * Makie.blue(c)
 # of width w along the piece's silhouette edges (edges not shared by two
 # coplanar faces of the piece), so they are depth-sorted with the faces even on
 # backends without a depth buffer.
-function add_piece!(V, C, F, cells::Vector{NTuple{3,Int}}, color, w)
+function add_piece!(V, C, F, cells::Vector{NTuple{3,Int}}, color, w; alpha = 1.0f0)
     faces = exterior_faces(cells)
     seen = Dict{Any,Int}()
     for (c, d, s) in faces
@@ -77,7 +77,7 @@ function add_piece!(V, C, F, cells::Vector{NTuple{3,Int}}, color, w)
                  (corner(4), out(3), corner(3)))     # v = 1 row: q4 -> q3
         P(u, v) = q[1] + u * (q[2] - q[1]) + v * (q[4] - q[1])
         for j in 1:3, i in 1:3
-            col = inked[j][i] ? INK : fill
+            col = Makie.RGBAf(inked[j][i] ? INK : fill, alpha)
             o = length(V)
             push!(V, P(us[i], us[j]), P(us[i+1], us[j]), P(us[i+1], us[j+1]), P(us[i], us[j+1]))
             push!(C, col, col, col, col)
@@ -125,28 +125,51 @@ function piece_colors(sol, step, order, coloring, colors, highlight, muted)
     end
 end
 
+# Assembly order for the axis's viewpoint: in 3D, build from the back and left
+# so each new piece goes in front of the ones already placed.
+function view_order(ax, sol::Solution)
+    ax isa Axis3 || return assembly_order(sol)
+    az, el = ax.azimuth[], ax.elevation[]
+    assembly_order(sol; view = (cos(az) * cos(el), sin(az) * cos(el), sin(el)),
+                   right = (-sin(az), cos(az), 0.0))
+end
+
 function plot_solution!(ax, sol::Solution{3}; step::Integer = length(sol),
-                        order = assembly_order(sol), coloring = piece_coloring(sol),
+                        order = view_order(ax, sol), coloring = piece_coloring(sol),
                         colors = PALETTE, highlight::Bool = step < length(sol),
-                        muted::Bool = true, frame::Bool = true, linewidth = 0.035)
+                        muted::Bool = true, frame::Bool = true, linewidth = 0.035,
+                        ghost::Bool = true)
     lo, hi = bounds(reduce(vcat, [pl.cells for pl in sol]))
+    # fixed limits, so every step (and animation frame) has the same framing
+    limits!(ax, lo[1] - 1, hi[1], lo[2] - 1, hi[2], lo[3] - 1, hi[3])
     frame && linesegments!(ax, frame_3d(lo, hi); color = FRAME, linewidth = 0.8)
     step == 0 && return ax
     cols = piece_colors(sol, step, order, coloring, colors, highlight, muted)
-    V, C, F = Point3f[], Makie.RGBf[], Makie.GLTriangleFace[]
+    # pieces hiding the newest one from the viewer are drawn as faint ghosts
+    hiders = Set{Int}()
+    if highlight && ghost && ax isa Axis3
+        az, el = ax.azimuth[], ax.elevation[]
+        shown = Set(order[1:step])
+        owner = Dict(c => k for (k, pl) in enumerate(sol) if k in shown for c in pl.cells)
+        _, _, hiders = sightlines(owner, order[step], o -> true,
+                                  (cos(az) * cos(el), sin(az) * cos(el), sin(el)))
+    end
+    V, C, F = Point3f[], Makie.RGBAf[], Makie.GLTriangleFace[]
     for (i, k) in enumerate(order[1:step])
         newest = highlight && i == step
-        add_piece!(V, C, F, sol.placements[k].cells, cols[i], newest ? 2.2 * linewidth : linewidth)
+        add_piece!(V, C, F, sol.placements[k].cells, cols[i], newest ? 2.2 * linewidth : linewidth;
+                   alpha = k in hiders ? 0.15f0 : 1.0f0)
     end
     mesh!(ax, V, F; color = C, shading = NoShading)
     ax
 end
 
 function plot_solution!(ax, sol::Solution{2}; step::Integer = length(sol),
-                        order = assembly_order(sol), coloring = piece_coloring(sol),
+                        order = view_order(ax, sol), coloring = piece_coloring(sol),
                         colors = PALETTE, highlight::Bool = step < length(sol),
                         muted::Bool = true, frame::Bool = true, linewidth = 1.2)
     lo, hi = bounds(reduce(vcat, [pl.cells for pl in sol]))
+    limits!(ax, lo[1] - 1.1, hi[1] + 0.1, lo[2] - 1.1, hi[2] + 0.1)
     if frame
         x0, y0 = lo .- 1
         x1, y1 = hi
@@ -198,7 +221,7 @@ function plot_solution(sol::Solution; size = (600, 600), title = "", kw...)
     fig
 end
 
-function plot_steps(sol::Solution; order = assembly_order(sol), columns::Integer = 5,
+function plot_steps(sol::Solution; order = nothing, columns::Integer = 5,
                     panelsize = 260, kw...)
     axkw, plotkw = split_kw(kw)
     n = length(sol)
@@ -208,16 +231,18 @@ function plot_steps(sol::Solution; order = assembly_order(sol), columns::Integer
         ax = new_axis(fig[fld1(k, columns), mod1(k, columns)], sol;
                       title = "Step $k", titlealign = :left, titlesize = 14,
                       titlefont = :regular, axkw...)
+        order === nothing && (order = view_order(ax, sol))
         plot_solution!(ax, sol; step = k, order, highlight = true, plotkw...)
     end
     fig
 end
 
-function animate_assembly(sol::Solution, filename::AbstractString; order = assembly_order(sol),
+function animate_assembly(sol::Solution, filename::AbstractString; order = nothing,
                           framerate::Integer = 1, size = (600, 600), kw...)
     axkw, plotkw = split_kw(kw)
     fig = Figure(; size)
     ax = new_axis(fig[1, 1], sol; axkw...)
+    order === nothing && (order = view_order(ax, sol))
     n = length(sol)
     record(fig, filename, 1:n; framerate) do k
         empty!(ax)
