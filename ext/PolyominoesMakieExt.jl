@@ -1,7 +1,7 @@
 module PolyominoesMakieExt
 
 using Polyominoes
-using Polyominoes: Solution, Placement, neighbors, bounds, sightlines
+using Polyominoes: Solution, Placement, Insertion, neighbors, bounds, sightlines, insertion
 using Makie
 
 import Polyominoes: plot_solution, plot_solution!, plot_steps, animate_assembly
@@ -12,13 +12,54 @@ import Polyominoes: plot_solution, plot_solution!, plot_steps, animate_assembly
 # relying on colour alone.
 const PALETTE = Makie.to_color.(["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
                                  "#e87ba4", "#008300", "#6250d6", "#e34948"])
+# Wood tones for style = :wood, alternating light and dark so that touching
+# pieces (which get different slots) contrast: maple, mahogany, oak, walnut,
+# ash, cherry, beech, padauk.
+const WOODS = Makie.to_color.(["#e2c08d", "#8c4a32", "#c9a165", "#6e4a2f",
+                               "#eedcb3", "#b36b3f", "#d4a373", "#a4502d"])
 const MUTED_TOWARD = Makie.to_color("#e4e3df")
+const WOOD_MUTED_TOWARD = Makie.to_color("#f3ead9")
 const INK = Makie.to_color("#2b2b29")
+const WOOD_INK = Makie.to_color("#3b2a1d")
 const FRAME = Makie.to_color("#b8b7b1")
 
 blend(a, b, t) = Makie.RGBf((1 - t) * Makie.red(a) + t * Makie.red(b),
                             (1 - t) * Makie.green(a) + t * Makie.green(b),
                             (1 - t) * Makie.blue(a) + t * Makie.blue(b))
+
+shade(c, f) = Makie.RGBf(min(1, f * Makie.red(c)), min(1, f * Makie.green(c)), min(1, f * Makie.blue(c)))
+
+# Deterministic pseudo-random number in [0, 1) for piece `seed`, draw `i`.
+rnd(seed, i) = (hash((seed, i, :wood)) % 0x100000) / 0x100000
+
+# Colour of a piece at a point. Wood is a solid texture: growth rings around a
+# "log" axis running along the piece's longest dimension, so the grain follows
+# the piece and wraps continuously round its corners.
+function painter(style::Symbol, cells::Vector{NTuple{N,Int}}, base, seed) where {N}
+    style === :flat && return p -> base
+    style === :wood || throw(ArgumentError("style must be :flat or :wood, got :$style"))
+    lo, hi = bounds(cells)
+    a = argmax(collect(hi .- lo))
+    centre = ntuple(N) do i
+        i == a && return 0.0
+        mid = (lo[i] + hi[i]) / 2 - 0.5
+        mid + (rnd(seed, i) < 0.5 ? -1 : 1) * (1.5 + 3 * rnd(seed, i + N))
+    end
+    freq = 1.3 + 0.7 * rnd(seed, 2N + 1)
+    phase = 2π * rnd(seed, 2N + 2)
+    light, dark = shade(base, 1.06), shade(base, 0.66)
+    function (p)
+        r2 = 0.0
+        for i in 1:N
+            i == a || (r2 += (p[i] - centre[i])^2)
+        end
+        x = p[a]
+        r = sqrt(r2) + 0.12 * sin(0.9 * x + phase) + 0.05 * sin(2.7 * x + 2 * phase)
+        ring = (0.5 + 0.5 * cos(2π * r * freq))^4       # thin dark latewood bands
+        streak = 0.05 * sin(31 * r + 5 * phase) * sin(0.7 * x)
+        blend(light, dark, clamp(0.12 + 0.6 * ring + streak, 0, 1))
+    end
+end
 
 # Exterior faces of a piece: (cell, axis, sign) where the neighbour across the
 # face is not part of the same piece.
@@ -46,14 +87,15 @@ edgekey(a, b, d, s) = (minmax(Tuple(a), Tuple(b))..., d, s)
 const FACE_SHADE = Dict((3, 1) => 1.0, (3, -1) => 0.55, (1, 1) => 0.86,
                         (1, -1) => 0.86, (2, 1) => 0.72, (2, -1) => 0.72)
 
-shade(c, f) = Makie.RGBf(f * Makie.red(c), f * Makie.green(c), f * Makie.blue(c))
-
 # Append the exterior faces of a polycube to the mesh buffers (V vertices, C
-# vertex colours, F triangles). Outlines are drawn into the mesh as dark strips
-# of width w along the piece's silhouette edges (edges not shared by two
-# coplanar faces of the piece), so they are depth-sorted with the faces even on
-# backends without a depth buffer.
-function add_piece!(V, C, F, cells::Vector{NTuple{3,Int}}, color, w; alpha = 1.0f0)
+# vertex colours, F triangles), except those for which skip(cell, axis, sign).
+# Outlines are drawn into the mesh as strips of width w along the piece's
+# silhouette edges (edges not shared by two coplanar faces of the piece), so
+# they are depth-sorted with the faces even on backends without a depth
+# buffer. Each face is subdivided nsub times inside its border so that a
+# textured paint can vary across it.
+function add_piece!(V, C, F, cells::Vector{NTuple{3,Int}}, paint, w, ink;
+                    alpha = 1.0f0, skip = (c, d, s) -> false, nsub = 1)
     faces = exterior_faces(cells)
     seen = Dict{Any,Int}()
     for (c, d, s) in faces
@@ -65,22 +107,38 @@ function add_piece!(V, C, F, cells::Vector{NTuple{3,Int}}, color, w; alpha = 1.0
     end
     outline = Set(k for (k, n) in seen if n == 1)
     ends = Set((p, k[3], k[4]) for k in outline for p in (k[1], k[2]))
-    us = (0.0f0, Float32(w), 1.0f0 - Float32(w), 1.0f0)
+    w = Float32(w)
+    us = Float32[0; w; [w + (1 - 2w) * i / nsub for i in 1:nsub-1]; 1 - w; 1]
+    m = length(us) - 1
+    inkc = Makie.RGBAf(ink, alpha)
     for (c, d, s) in faces
+        skip(c, d, s) && continue
         q = face_corners(c, d, s)
-        fill = shade(color, FACE_SHADE[(d, s)])
+        f = FACE_SHADE[(d, s)]
         out(k) = edgekey(q[k], q[mod1(k + 1, 4)], d, s) in outline
         corner(k) = (Tuple(q[k]), d, s) in ends
-        # 3x3 grid on the face: corners, edge strips, centre
-        inked = ((corner(1), out(1), corner(2)),     # v = 0 row: q1 -> q2
-                 (out(4), false, out(2)),
-                 (corner(4), out(3), corner(3)))     # v = 1 row: q4 -> q3
+        # border cells of the grid are outline strips where the edge is a silhouette
+        function inked(i, j)
+            (i == 1 || i == m) && (j == 1 || j == m) &&
+                return corner(i == 1 ? (j == 1 ? 1 : 4) : (j == 1 ? 2 : 3))
+            j == 1 && return out(1)
+            i == m && return out(2)
+            j == m && return out(3)
+            i == 1 && return out(4)
+            false
+        end
         P(u, v) = q[1] + u * (q[2] - q[1]) + v * (q[4] - q[1])
-        for j in 1:3, i in 1:3
-            col = Makie.RGBAf(inked[j][i] ? INK : fill, alpha)
+        for j in 1:m, i in 1:m
+            pts = (P(us[i], us[j]), P(us[i+1], us[j]), P(us[i+1], us[j+1]), P(us[i], us[j+1]))
             o = length(V)
-            push!(V, P(us[i], us[j]), P(us[i+1], us[j]), P(us[i+1], us[j+1]), P(us[i], us[j+1]))
-            push!(C, col, col, col, col)
+            push!(V, pts...)
+            if inked(i, j)
+                push!(C, inkc, inkc, inkc, inkc)
+            else
+                for p in pts
+                    push!(C, Makie.RGBAf(shade(paint(p), f), alpha))
+                end
+            end
             push!(F, Makie.GLTriangleFace(o + 1, o + 2, o + 3), Makie.GLTriangleFace(o + 1, o + 3, o + 4))
         end
     end
@@ -103,6 +161,21 @@ function outline_2d(cells::Vector{NTuple{2,Int}})
     pts
 end
 
+# Subdivided squares for a 2D piece, coloured by paint at each vertex.
+function add_cells_2d!(V, C, F, cells, paint, nsub)
+    for c in cells, j in 1:nsub, i in 1:nsub
+        x0 = c[1] - 1 + (i - 1) / nsub
+        y0 = c[2] - 1 + (j - 1) / nsub
+        x1, y1 = x0 + 1 / nsub, y0 + 1 / nsub
+        o = length(V)
+        for p in (Point2f(x0, y0), Point2f(x1, y0), Point2f(x1, y1), Point2f(x0, y1))
+            push!(V, p)
+            push!(C, paint(p))
+        end
+        push!(F, Makie.GLTriangleFace(o + 1, o + 2, o + 3), Makie.GLTriangleFace(o + 1, o + 3, o + 4))
+    end
+end
+
 function frame_3d(lo, hi)
     x0, y0, z0 = lo .- 1
     x1, y1, z1 = hi
@@ -116,58 +189,120 @@ function frame_3d(lo, hi)
     pts
 end
 
-function piece_colors(sol, step, order, coloring, colors, highlight, muted)
-    shown = order[1:step]
+function piece_colors(step, order, coloring, colors, highlight, muted, style)
     newest = step > 0 ? order[step] : 0
-    map(shown) do k
+    # wood keeps more of its colour when muted, so it still reads as wood
+    toward, t = style === :wood ? (WOOD_MUTED_TOWARD, 0.62) : (MUTED_TOWARD, 0.72)
+    map(order[1:step]) do k
         base = colors[mod1(coloring[k], length(colors))]
-        highlight && muted && k != newest ? blend(base, MUTED_TOWARD, 0.72) : base
+        highlight && muted && k != newest ? blend(base, toward, t) : base
     end
 end
+
+viewdir(ax::Axis3) = (az = ax.azimuth[]; el = ax.elevation[];
+                      (cos(az) * cos(el), sin(az) * cos(el), sin(el)))
+rightdir(ax::Axis3) = (az = ax.azimuth[]; (-sin(az), cos(az), 0.0))
 
 # Assembly order for the axis's viewpoint: in 3D, build from the back and left
 # so each new piece goes in front of the ones already placed.
 function view_order(ax, sol::Solution)
     ax isa Axis3 || return assembly_order(sol)
-    az, el = ax.azimuth[], ax.elevation[]
-    assembly_order(sol; view = (cos(az) * cos(el), sin(az) * cos(el), sin(el)),
-                   right = (-sin(az), cos(az), 0.0))
+    assembly_order(sol; view = viewdir(ax), right = rightdir(ax))
+end
+
+# Where a sliding piece comes from, in the viewer's terms.
+function from_words(ins::Insertion{N}, ax) where {N}
+    ins.kind === :path && return "slide in along the arrow"
+    ins.kind === :blocked && return "can't be slid in"
+    ins.kind === :slide || return ""
+    from = .-ins.moves[1]
+    if N == 3 && ax isa Axis3
+        r, h = rightdir(ax), viewdir(ax)
+        h = (h[1], h[2], 0.0)
+        dirs = ("right" => sum(from .* r), "left" => -sum(from .* r),
+                "front" => sum(from .* h), "back" => -sum(from .* h), "above" => float(from[3]))
+    else
+        dirs = ("right" => float(from[1]), "left" => -float(from[1]), "above" => float(from[N]))
+    end
+    "slide in from the " * first(argmax(last, dirs))
+end
+
+centroid(cells) = reduce((a, b) -> a .+ b, (Float32.(c) .- 0.5f0 for c in cells)) ./ length(cells)
+
+# Arrow along the slide(s) that bring a piece into place, ending just short of it.
+function draw_slide!(ax, cells::Vector{NTuple{N,Int}}, ins::Insertion{N}, color) where {N}
+    ins.kind in (:slide, :path) || return
+    P = N == 3 ? Point3f : Point2f
+    pts = [P(centroid(cells))]
+    for m in Iterators.reverse(ins.moves)
+        pushfirst!(pts, pts[1] - P(m))
+    end
+    # a straight slide only needs a short arrow
+    if ins.kind === :slide
+        d = pts[2] - pts[1]
+        pts[1] = pts[2] - d / sqrt(sum(abs2, d)) * min(sqrt(sum(abs2, d)), 2.5f0)
+    end
+    tail = pts[end] - pts[end-1]
+    len = sqrt(sum(abs2, tail))
+    tipend = pts[end] - tail / len * 0.6f0
+    length(pts) > 2 && lines!(ax, pts[1:end-1]; color, linewidth = 3)
+    if N == 3
+        arrows3d!(ax, [pts[end-1]], [Vec3f(tipend - pts[end-1])]; color,
+                  shaftradius = 0.06, tipradius = 0.18, tiplength = 0.4, markerscale = 1)
+    else
+        arrows2d!(ax, [pts[end-1]], [Vec2f(tipend - pts[end-1])]; color,
+                  shaftwidth = 3, tipwidth = 14, tiplength = 14)
+    end
 end
 
 function plot_solution!(ax, sol::Solution{3}; step::Integer = length(sol),
                         order = view_order(ax, sol), coloring = piece_coloring(sol),
-                        colors = PALETTE, highlight::Bool = step < length(sol),
-                        muted::Bool = true, frame::Bool = true, linewidth = 0.035,
-                        ghost::Bool = true)
+                        style::Symbol = :flat, colors = style === :wood ? WOODS : PALETTE,
+                        highlight::Bool = step < length(sol), muted::Bool = true,
+                        frame::Bool = true, linewidth = style === :wood ? 0.025 : 0.035,
+                        ghost::Bool = true, arrows::Bool = true)
     lo, hi = bounds(reduce(vcat, [pl.cells for pl in sol]))
     # fixed limits, so every step (and animation frame) has the same framing
     limits!(ax, lo[1] - 1, hi[1], lo[2] - 1, hi[2], lo[3] - 1, hi[3])
     frame && linesegments!(ax, frame_3d(lo, hi); color = FRAME, linewidth = 0.8)
     step == 0 && return ax
-    cols = piece_colors(sol, step, order, coloring, colors, highlight, muted)
+    shown = order[1:step]
+    cols = piece_colors(step, order, coloring, colors, highlight, muted, style)
+    ink = style === :wood ? WOOD_INK : INK
     # pieces hiding the newest one from the viewer are drawn as faint ghosts
     hiders = Set{Int}()
     if highlight && ghost && ax isa Axis3
-        az, el = ax.azimuth[], ax.elevation[]
-        shown = Set(order[1:step])
-        owner = Dict(c => k for (k, pl) in enumerate(sol) if k in shown for c in pl.cells)
-        _, _, hiders = sightlines(owner, order[step], o -> true,
-                                  (cos(az) * cos(el), sin(az) * cos(el), sin(el)))
+        owner = Dict(c => k for k in shown for c in sol.placements[k].cells)
+        _, _, hiders = sightlines(owner, order[step], o -> true, viewdir(ax))
     end
+    # faces against an opaque piece, or turned away from the viewer, can't be seen
+    opaque = Set(c for k in shown if !(k in hiders) for c in sol.placements[k].cells)
+    v = ax isa Axis3 ? viewdir(ax) : nothing
+    skip(c, d, s) = ntuple(i -> c[i] + (i == d) * s, 3) in opaque ||
+                    (v !== nothing && s * v[d] <= 0)
     V, C, F = Point3f[], Makie.RGBAf[], Makie.GLTriangleFace[]
-    for (i, k) in enumerate(order[1:step])
+    for (i, k) in enumerate(shown)
         newest = highlight && i == step
-        add_piece!(V, C, F, sol.placements[k].cells, cols[i], newest ? 2.2 * linewidth : linewidth;
-                   alpha = k in hiders ? 0.15f0 : 1.0f0)
+        cells = sol.placements[k].cells
+        add_piece!(V, C, F, cells, painter(style, cells, cols[i], k),
+                   newest ? (style === :wood ? 3.2 : 2.2) * linewidth : linewidth, ink;
+                   alpha = k in hiders ? 0.15f0 : 1.0f0, skip,
+                   # ghosts are plain: subdivision seams would show through
+                   nsub = style === :wood && !(k in hiders) ? 8 : 1)
     end
     mesh!(ax, V, F; color = C, shading = NoShading)
+    if highlight && arrows
+        k = order[step]
+        draw_slide!(ax, sol.placements[k].cells, insertion(sol, k, order[1:step-1]), ink)
+    end
     ax
 end
 
 function plot_solution!(ax, sol::Solution{2}; step::Integer = length(sol),
                         order = view_order(ax, sol), coloring = piece_coloring(sol),
-                        colors = PALETTE, highlight::Bool = step < length(sol),
-                        muted::Bool = true, frame::Bool = true, linewidth = 1.2)
+                        style::Symbol = :flat, colors = style === :wood ? WOODS : PALETTE,
+                        highlight::Bool = step < length(sol), muted::Bool = true,
+                        frame::Bool = true, linewidth = 1.2, arrows::Bool = true)
     lo, hi = bounds(reduce(vcat, [pl.cells for pl in sol]))
     limits!(ax, lo[1] - 1.1, hi[1] + 0.1, lo[2] - 1.1, hi[2] + 0.1)
     if frame
@@ -176,20 +311,33 @@ function plot_solution!(ax, sol::Solution{2}; step::Integer = length(sol),
         lines!(ax, Point2f[(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)];
                color = FRAME, linewidth = 0.8)
     end
-    cols = piece_colors(sol, step, order, coloring, colors, highlight, muted)
+    step == 0 && return ax
+    cols = piece_colors(step, order, coloring, colors, highlight, muted, style)
+    ink = style === :wood ? WOOD_INK : INK
     for (i, k) in enumerate(order[1:step])
         cells = sol.placements[k].cells
-        poly!(ax, [Rect2f(c[1] - 1, c[2] - 1, 1, 1) for c in cells]; color = cols[i],
-              strokecolor = cols[i], strokewidth = 0.75)
+        if style === :flat
+            poly!(ax, [Rect2f(c[1] - 1, c[2] - 1, 1, 1) for c in cells]; color = cols[i],
+                  strokecolor = cols[i], strokewidth = 0.75)
+        else
+            V, C, F = Point2f[], Makie.RGBf[], Makie.GLTriangleFace[]
+            add_cells_2d!(V, C, F, cells, painter(style, cells, cols[i], k), 8)
+            mesh!(ax, V, F; color = C, shading = NoShading)
+        end
         newest = highlight && i == step
-        linesegments!(ax, outline_2d(cells); color = INK,
+        linesegments!(ax, outline_2d(cells); color = ink,
                       linewidth = newest ? 2.5 * linewidth : linewidth)
+    end
+    if highlight && arrows
+        k = order[step]
+        draw_slide!(ax, sol.placements[k].cells, insertion(sol, k, order[1:step-1]), ink)
     end
     ax
 end
 
 function new_axis(pos, ::Solution{3}; title = "", azimuth = 1.15π, elevation = 0.18π, kw...)
-    ax = Axis3(pos; aspect = :data, azimuth, elevation, title, kw...)
+    # unclipped, so slide arrows starting outside the box are drawn
+    ax = Axis3(pos; aspect = :data, azimuth, elevation, title, clip = false, kw...)
     hidedecorations!(ax)
     hidespines!(ax)
     ax
@@ -213,6 +361,11 @@ const AXIS_KEYS = (:azimuth, :elevation)
 split_kw(kw) = (; (k => v for (k, v) in pairs(kw) if k in AXIS_KEYS)...),
                (; (k => v for (k, v) in pairs(kw) if !(k in AXIS_KEYS))...)
 
+function step_title(sol, order, k, ax; prefix = "Step $k")
+    words = from_words(insertion(sol, order[k], order[1:k-1]), ax)
+    isempty(words) ? prefix : "$prefix: $words"
+end
+
 function plot_solution(sol::Solution; size = (600, 600), title = "", kw...)
     axkw, plotkw = split_kw(kw)
     fig = Figure(; size)
@@ -229,9 +382,9 @@ function plot_steps(sol::Solution; order = nothing, columns::Integer = 5,
     fig = Figure(; size = (columns * panelsize, rows * (panelheight(sol, panelsize) + 30)))
     for k in 1:n
         ax = new_axis(fig[fld1(k, columns), mod1(k, columns)], sol;
-                      title = "Step $k", titlealign = :left, titlesize = 14,
-                      titlefont = :regular, axkw...)
+                      titlealign = :left, titlesize = 14, titlefont = :regular, axkw...)
         order === nothing && (order = view_order(ax, sol))
+        ax.title = step_title(sol, order, k, ax)
         plot_solution!(ax, sol; step = k, order, highlight = true, plotkw...)
     end
     fig
@@ -246,7 +399,7 @@ function animate_assembly(sol::Solution, filename::AbstractString; order = nothi
     n = length(sol)
     record(fig, filename, 1:n; framerate) do k
         empty!(ax)
-        ax.title = k < n ? "Step $k of $n" : "Done"
+        ax.title = k < n ? step_title(sol, order, k, ax; prefix = "Step $k of $n") : "Done"
         plot_solution!(ax, sol; step = k, order, highlight = k < n, plotkw...)
     end
     filename
