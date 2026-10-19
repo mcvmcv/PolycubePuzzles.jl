@@ -1,10 +1,10 @@
 # Regenerate the figures used by README.md and the documentation. Run from an
-# environment with Polyominoes and CairoMakie, e.g.
+# environment with PolycubePuzzles and CairoMakie, e.g.
 #
 #     julia --project=examples -e 'using Pkg; Pkg.develop(path="."); Pkg.add("CairoMakie")'
 #     julia --project=examples --threads=auto examples/figures.jl
 
-using Polyominoes, CairoMakie
+using PolycubePuzzles, CairoMakie
 
 outdir = joinpath(@__DIR__, "..", "docs", "src", "assets")
 mkpath(outdir)

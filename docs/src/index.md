@@ -1,6 +1,6 @@
-# Polyominoes.jl
+# PolycubePuzzles.jl
 
-Polyominoes.jl solves packing puzzles: fill a target shape with a given set of
+PolycubePuzzles.jl solves packing puzzles: fill a target shape with a given set of
 pieces. It works in any dimension (flat polyomino puzzles, polycube puzzles
 like the Soma cube, and beyond), finds or counts every solution, counts them
 up to symmetry, and draws step-by-step assembly instructions.
@@ -11,7 +11,7 @@ up to symmetry, and draws step-by-step assembly instructions.
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/mcvmcv/Polyominoes.jl")
+Pkg.add(url = "https://github.com/mcvmcv/PolycubePuzzles.jl")
 ```
 
 Plotting needs a [Makie](https://docs.makie.org) backend, such as
@@ -24,7 +24,7 @@ Twenty-five copies of the Y pentacube (four cubes in a row, with one more on
 the second) fill a 5×5×5 cube:
 
 ```julia
-using Polyominoes
+using PolycubePuzzles
 
 Y = shape"""
 XXXX

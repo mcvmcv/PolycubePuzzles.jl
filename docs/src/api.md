@@ -1,7 +1,7 @@
 # API
 
 ```@docs
-Polyominoes
+PolycubePuzzles
 ```
 
 ## Shapes

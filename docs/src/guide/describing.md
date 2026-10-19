@@ -1,7 +1,7 @@
 # Describing puzzles
 
 ```@meta
-DocTestSetup = :(using Polyominoes)
+DocTestSetup = :(using PolycubePuzzles)
 ```
 
 A puzzle is a target region and a collection of pieces. Both are

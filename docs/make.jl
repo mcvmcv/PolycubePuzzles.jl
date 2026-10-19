@@ -1,12 +1,12 @@
-using Documenter, Polyominoes
+using Documenter, PolycubePuzzles
 
-DocMeta.setdocmeta!(Polyominoes, :DocTestSetup, :(using Polyominoes); recursive = true)
+DocMeta.setdocmeta!(PolycubePuzzles, :DocTestSetup, :(using PolycubePuzzles); recursive = true)
 
 makedocs(;
-    modules = [Polyominoes],
-    sitename = "Polyominoes.jl",
+    modules = [PolycubePuzzles],
+    sitename = "PolycubePuzzles.jl",
     authors = "Michael McVeagh",
-    format = Documenter.HTML(; canonical = "https://mcvmcv.github.io/Polyominoes.jl",
+    format = Documenter.HTML(; canonical = "https://mcvmcv.github.io/PolycubePuzzles.jl",
                              edit_link = "main", assets = String[]),
     pages = [
         "Home" => "index.md",
@@ -20,4 +20,4 @@ makedocs(;
     checkdocs = :exports,
 )
 
-deploydocs(; repo = "github.com/mcvmcv/Polyominoes.jl", devbranch = "main")
+deploydocs(; repo = "github.com/mcvmcv/PolycubePuzzles.jl", devbranch = "main")

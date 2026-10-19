@@ -1,4 +1,4 @@
-using Polyominoes
+using PolycubePuzzles
 using Test
 
 const P5 = pentominoes()
@@ -17,19 +17,19 @@ function naive_orbits(p::Puzzle{N}, mode) where {N}
     keys = Set(key(s) for s in raw)
     t0 = normalize(p.target)
     gs = []
-    for (perm, signs) in Polyominoes.symmetries(N; reflections = true)
-        mode === :rotations && Polyominoes.parity(perm) * prod(signs) == -1 && continue
-        img = Shape([Polyominoes.transform(c, perm, signs) for c in p.target.cells])
+    for (perm, signs) in PolycubePuzzles.symmetries(N; reflections = true)
+        mode === :rotations && PolycubePuzzles.parity(perm) * prod(signs) == -1 && continue
+        img = Shape([PolycubePuzzles.transform(c, perm, signs) for c in p.target.cells])
         normalize(img) == t0 || continue
-        off = first(Polyominoes.bounds(p.target.cells)) .- first(Polyominoes.bounds(img.cells))
-        g(c) = Polyominoes.transform(c, perm, signs) .+ off
+        off = first(PolycubePuzzles.bounds(p.target.cells)) .- first(PolycubePuzzles.bounds(img.cells))
+        g(c) = PolycubePuzzles.transform(c, perm, signs) .+ off
         image(sol) = sort([(label(map(g, pl.cells)), sort(map(g, pl.cells))) for pl in sol])
         all(s -> image(s) in keys, raw) && push!(gs, image)
     end
     count(s -> all(image -> key(s) <= image(s), gs), raw)
 end
 
-@testset "Polyominoes" begin
+@testset "PolycubePuzzles" begin
     @testset "shapes" begin
         @test Y == Shape((1, 2), (2, 2), (3, 2), (4, 2), (2, 1))
         @test ncells(box(5, 5, 5)) == 125
@@ -206,7 +206,7 @@ end
         col = piece_coloring(sol)
         owner = Dict(c => k for (k, pl) in enumerate(sol) for c in pl.cells)
         @test all(owner) do (c, k)
-            all(d -> (o = get(owner, d, k); o == k || col[o] != col[k]), Polyominoes.neighbors(c))
+            all(d -> (o = get(owner, d, k); o == k || col[o] != col[k]), PolycubePuzzles.neighbors(c))
         end
         @test maximum(col) <= 8
         p2 = solve(Puzzle(box(10, 6), [s => 1 for s in P5]; reflections = true); limit = 1)[1]

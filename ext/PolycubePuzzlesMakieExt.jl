@@ -1,10 +1,10 @@
-module PolyominoesMakieExt
+module PolycubePuzzlesMakieExt
 
-using Polyominoes
-using Polyominoes: Solution, Placement, Insertion, neighbors, bounds, sightlines, insertion
+using PolycubePuzzles
+using PolycubePuzzles: Solution, Placement, Insertion, neighbors, bounds, sightlines, insertion
 using Makie
 
-import Polyominoes: plot_solution, plot_solution!, plot_steps, animate_assembly
+import PolycubePuzzles: plot_solution, plot_solution!, plot_steps, animate_assembly
 
 # Categorical palette in fixed slot order (blue, orange, aqua, yellow, magenta,
 # green, violet, red). Pieces get slots by adjacency colouring, so touching

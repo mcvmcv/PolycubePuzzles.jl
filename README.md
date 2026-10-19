@@ -1,18 +1,18 @@
-# Polyominoes.jl
+# PolycubePuzzles.jl
 
-[![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://mcvmcv.github.io/Polyominoes.jl/dev/)
-[![CI](https://github.com/mcvmcv/Polyominoes.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/mcvmcv/Polyominoes.jl/actions/workflows/CI.yml)
+[![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://mcvmcv.github.io/PolycubePuzzles.jl/dev/)
+[![CI](https://github.com/mcvmcv/PolycubePuzzles.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/mcvmcv/PolycubePuzzles.jl/actions/workflows/CI.yml)
 
 Solve packing puzzles in any dimension: fill a target region with a given
 multiset of pieces (polyominoes, polycubes, ...), enumerate all solutions,
 count them up to symmetry, and plot step-by-step assembly instructions.
-See the [documentation](https://mcvmcv.github.io/Polyominoes.jl/dev/) for a
+See the [documentation](https://mcvmcv.github.io/PolycubePuzzles.jl/dev/) for a
 full guide.
 
 ![The 5×5×5 cube in wood](docs/src/assets/y5_wood.png)
 
 ```julia
-using Polyominoes
+using PolycubePuzzles
 
 Y = shape"""
 XXXX
@@ -33,7 +33,7 @@ shapes come from those cells, and `Solution` checks that they really solve the
 puzzle (no overlaps, gaps, or cells outside the cube):
 
 ```julia
-using Polyominoes
+using PolycubePuzzles
 
 pieces = [
     [(1,3,1), (2,3,1), (3,3,1), (3,2,1), (1,3,2)],

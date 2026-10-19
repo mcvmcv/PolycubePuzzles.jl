@@ -2,7 +2,7 @@
 
 ```@meta
 DocTestSetup = quote
-    using Polyominoes
+    using PolycubePuzzles
     S = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
 end
 ```

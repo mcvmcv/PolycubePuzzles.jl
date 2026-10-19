@@ -1,5 +1,5 @@
 """
-    Polyominoes
+    PolycubePuzzles
 
 Solve packing puzzles: fill a target region of the N-dimensional integer lattice
 with a given multiset of pieces (polyominoes, polycubes, ...). Puzzles are
@@ -7,7 +7,7 @@ reduced to exact cover and solved with Knuth's dancing links (Algorithm X),
 extended with per-piece-type count bounds so identical pieces are never
 distinguished (no duplicate solutions from permuting copies).
 """
-module Polyominoes
+module PolycubePuzzles
 
 export Shape, @shape_str, parse_shape, box, normalize, ncells
 export orientations
