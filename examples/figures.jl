@@ -47,3 +47,11 @@ pent = solve(Puzzle(box(10, 6), [s => 1 for s in pentominoes()]; reflections = t
 save(fig("pentominoes.png"), plot_solution(pent; size = (500, 300)))
 save(fig("pentominoes_wood.png"), plot_solution(pent; style = :wood, size = (500, 300)))
 save(fig("pentominoes_steps.png"), plot_steps(pent; columns = 4, panelsize = 250))
+
+# A printable booklet for the Soma cube, in wood, and the interactive explorer
+# (saved as a still) browsing all its solutions
+somap = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
+somas = solve(somap; symmetry = :rotations)
+instructions(somas[1], fig("soma_booklet.png"); title = "Soma cube", steps_per_page = 8,
+             style = :wood)
+save(fig("soma_explore.png"), explore(somas; size = (700, 640)))

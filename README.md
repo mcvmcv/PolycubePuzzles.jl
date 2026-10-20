@@ -125,6 +125,8 @@ plot_solution(sol)                        # the finished puzzle
 plot_steps(sol)                           # one numbered panel per step
 plot_steps(sol; style = :wood)            # ... in wood
 animate_assembly(sol, "assembly.gif")     # one frame per step
+instructions(sol, "booklet.pdf")          # printable A4 booklet (needs CairoMakie)
+explore(sols)                             # step through and browse solutions (GLMakie)
 ```
 
 Each step shows the piece just placed with a heavy outline and the earlier
@@ -132,6 +134,17 @@ pieces muted; any placed piece that would hide the new one is drawn as a faint
 ghost, and a piece that must slide in from the side gets an arrow and a note
 in the step title. Keywords: `style` (`:flat` or `:wood`), `colors`,
 `azimuth`, `elevation`, `order`, `muted`, `ghost`, `arrows`, `frame`.
+
+`instructions` writes a title page (the parts, each kind of piece drawn on its
+own with how many there are, and the finished puzzle) and then the numbered
+steps, `steps_per_page` to a page, as one PDF or one image per page. `explore`
+opens an interactive window with sliders for the step and the solution, arrow
+key shortcuts, and toggles for wood, ghosts, arrows and muting.
+
+The Soma cube's steps from `instructions(sol, "soma.pdf"; style = :wood,
+steps_per_page = 8)`:
+
+![A page of printable instructions for the Soma cube, in wood](docs/src/assets/soma_booklet_2.png)
 
 The 25 Y pentacubes in the 5×5×5 cube:
 

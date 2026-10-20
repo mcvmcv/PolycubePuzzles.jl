@@ -92,6 +92,8 @@ line beside it says how each piece goes in. With several solutions, a second
 slider (or the up and down arrow keys) picks one. Toggles switch wood, ghosts,
 slide arrows and muting on and off.
 
+![The explorer browsing the 480 Soma cube solutions](../assets/soma_explore.png)
+
 ## Printable instructions
 
 [`instructions`](@ref) writes an A4 booklet: a title page with the parts
@@ -102,3 +104,10 @@ using CairoMakie
 instructions(sol, "cube.pdf")                     # one PDF
 instructions(sol, "cube.png"; style = :wood)      # cube_1.png, cube_2.png, ...
 ```
+
+For the Soma cube, in wood with eight steps to a page
+(`instructions(sol, "soma.pdf"; style = :wood, steps_per_page = 8)`):
+
+![Title page: the parts and the finished Soma cube](../assets/soma_booklet_1.png)
+
+![Steps page for the Soma cube](../assets/soma_booklet_2.png)

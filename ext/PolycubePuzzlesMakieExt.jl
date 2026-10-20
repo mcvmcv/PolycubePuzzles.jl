@@ -428,19 +428,20 @@ function explore(sols::AbstractVector{<:Solution}; style::Symbol = :flat, size =
     controls = GridLayout(fig[2, 1]; tellwidth = false)
 
     prev = Button(controls[1, 1]; label = "◀", width = 40)
-    stepslider = Slider(controls[1, 2]; range = 0:n, startvalue = n, width = 420)
+    # the sliders take whatever width the buttons and status line leave
+    stepslider = Slider(controls[1, 2]; range = 0:n, startvalue = n)
     next = Button(controls[1, 3]; label = "▶", width = 40)
-    status = Label(controls[1, 4], ""; halign = :left, width = 320)
+    status = Label(controls[1, 4], ""; halign = :left, width = 260)
 
     many = length(sols) > 1
-    solslider = many ? Slider(controls[2, 2]; range = 1:length(sols), startvalue = 1, width = 420) : nothing
+    solslider = many ? Slider(controls[2, 2]; range = 1:length(sols), startvalue = 1) : nothing
     if many
         Label(controls[2, 1], "Solution")
         sollabel = Label(controls[2, 3:4], lift(i -> "$i of $(length(sols))", solslider.value);
                          halign = :left)
     end
 
-    toggles = GridLayout(controls[3, 1:4])
+    toggles = GridLayout(controls[many ? 3 : 2, 1:4])
     function toggle(col, text, on)
         t = Toggle(toggles[1, 2col-1]; active = on)
         Label(toggles[1, 2col], text; halign = :left)
