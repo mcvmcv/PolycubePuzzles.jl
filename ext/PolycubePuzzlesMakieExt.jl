@@ -502,6 +502,8 @@ function instruction_pages(sol::Solution{N}; title = "Assembly instructions",
                            coloring = piece_coloring(sol), kw...) where {N}
     n = length(sol)
     axkw = N == 3 ? (; azimuth, elevation) : (;)
+    # small 3D panels: hidden decorations still reserve room unless told not to
+    panelkw = N == 3 ? (; axkw..., protrusions = 0) : axkw
     kw = (; colors, coloring, kw...)
     pages = Figure[]
     npages = 1 + cld(n, steps_per_page)
@@ -516,15 +518,13 @@ function instruction_pages(sol::Solution{N}; title = "Assembly instructions",
     Label(fig[2, 1], "$n pieces, $n steps"; fontsize = 12, halign = :left, tellwidth = false)
     Label(fig[3, 1], "Pieces"; fontsize = 15, font = :bold, halign = :left, tellwidth = false)
     parts = GridLayout(fig[4, 1]; tellwidth = false)
-    # small 3D panels: hidden decorations still reserve room unless told not to
-    partkw = N == 3 ? (; axkw..., protrusions = 0) : axkw
     pcols = min(length(types), 4)
     for (i, t) in enumerate(types)
         cell = parts[fld1(i, pcols), mod1(i, pcols)] = GridLayout()
         # drawn in the colour its first copy has in the steps
         k = findfirst(pl -> pl.piece == t, sol.placements)
         ps = piece_solution(sol, t, sol.placements[k].cells)
-        ax = new_axis(cell[1, 1], ps; partkw...)
+        ax = new_axis(cell[1, 1], ps; panelkw...)
         plot_solution!(ax, ps; colors = [colors[mod1(coloring[k], length(colors))]], style,
                        frame = false, highlight = false, coloring = [1])
         Label(cell[2, 1], "× $(counts[t])"; fontsize = 14, tellwidth = false)
@@ -549,7 +549,7 @@ function instruction_pages(sol::Solution{N}; title = "Assembly instructions",
             words = from_words(insertion(sol, order[k], order[1:k-1]), ax)
             Label(cell[1, 2], isempty(words) ? "" : words; fontsize = 11, halign = :right,
                   tellwidth = false)
-            sax = new_axis(cell[2, 1:2], sol; axkw...)
+            sax = new_axis(cell[2, 1:2], sol; panelkw...)
             plot_solution!(sax, sol; step = k, order, highlight = true, style, kw...)
             rowsize!(cell, 2, Relative(0.88))
         end
