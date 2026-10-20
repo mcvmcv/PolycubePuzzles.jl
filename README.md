@@ -102,8 +102,12 @@ prunes the search.
 `julia --threads=auto` to use all cores. `solve` and `count_solutions` default
 to `Threads.nthreads()`.
 
-The solver is Knuth's dancing links (Algorithm X), with a counter per piece type
-in place of one column per copy.
+Each piece type has a counter in place of one constraint per copy, so identical
+copies are never told apart. There are two search engines: a bitboard search
+(fastest for most flat puzzles) and Knuth's dancing links (Algorithm X, far
+faster on puzzles like the 5×5×5 cube). By default (`engine = :auto`) a quick
+random-probe estimate picks the faster one; pass `engine = :dlx` or
+`engine = :bitboard` to choose.
 
 ## Assembly instructions and plots
 
