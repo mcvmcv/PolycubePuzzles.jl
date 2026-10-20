@@ -19,7 +19,8 @@ const PALETTE = Makie.to_color.(["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
 const WOODS = Makie.to_color.(["#e2c08d", "#8c4a32", "#c9a165", "#6e4a2f",
                                "#eedcb3", "#b36b3f", "#d4a373", "#a4502d"])
 const MUTED_TOWARD = Makie.to_color("#e4e3df")
-const WOOD_MUTED_TOWARD = Makie.to_color("#f3ead9")
+const WOOD_MUTED_TOWARD = Makie.to_color("#ebe8e2")
+const WOOD_MUTED_GRAIN = 0.35
 const INK = Makie.to_color("#2b2b29")
 const WOOD_INK = Makie.to_color("#3b2a1d")
 const FRAME = Makie.to_color("#b8b7b1")
@@ -35,8 +36,9 @@ rnd(seed, i) = (hash((seed, i, :wood)) % 0x100000) / 0x100000
 
 # Colour of a piece at a point. Wood is a solid texture: growth rings around a
 # "log" axis running along the piece's longest dimension, so the grain follows
-# the piece and wraps continuously round its corners.
-function painter(style::Symbol, cells::Vector{NTuple{N,Int}}, base, seed) where {N}
+# the piece and wraps continuously round its corners. `grain` scales how dark
+# the rings are.
+function painter(style::Symbol, cells::Vector{NTuple{N,Int}}, base, seed; grain = 1.0) where {N}
     style === :flat && return p -> base
     style === :wood || throw(ArgumentError("style must be :flat or :wood, got :$style"))
     lo, hi = bounds(cells)
@@ -48,7 +50,7 @@ function painter(style::Symbol, cells::Vector{NTuple{N,Int}}, base, seed) where 
     end
     freq = 1.3 + 0.7 * rnd(seed, 2N + 1)
     phase = 2π * rnd(seed, 2N + 2)
-    light, dark = shade(base, 1.06), shade(base, 0.66)
+    light, dark = shade(base, 1.06), shade(base, 1 - 0.34 * grain)
     function (p)
         r2 = 0.0
         for i in 1:N
@@ -192,8 +194,9 @@ end
 
 function piece_colors(step, order, coloring, colors, highlight, muted, style)
     newest = step > 0 ? order[step] : 0
-    # wood keeps more of its colour when muted, so it still reads as wood
-    toward, t = style === :wood ? (WOOD_MUTED_TOWARD, 0.62) : (MUTED_TOWARD, 0.72)
+    # muted wood is bleached toward a cool grey (and its grain faded, see
+    # WOOD_MUTED_GRAIN), so the newest piece is the only warm, grainy one
+    toward, t = style === :wood ? (WOOD_MUTED_TOWARD, 0.7) : (MUTED_TOWARD, 0.72)
     map(order[1:step]) do k
         base = colors[mod1(coloring[k], length(colors))]
         highlight && muted && k != newest ? blend(base, toward, t) : base
@@ -286,7 +289,9 @@ function plot_solution!(ax, sol::Solution{3}; step::Integer = length(sol),
     for (i, k) in enumerate(shown)
         newest = highlight && i == step
         cells = sol.placements[k].cells
-        add_piece!(V, C, F, cells, painter(style, cells, cols[i], k),
+        faded = highlight && muted && !newest
+        add_piece!(V, C, F, cells,
+                   painter(style, cells, cols[i], k; grain = faded ? WOOD_MUTED_GRAIN : 1.0),
                    newest ? (style === :wood ? 3.2 : 2.2) * linewidth : linewidth, ink;
                    alpha = k in hiders ? 0.15f0 : 1.0f0, skip,
                    # ghosts are plain: subdivision seams would show through
@@ -323,7 +328,9 @@ function plot_solution!(ax, sol::Solution{2}; step::Integer = length(sol),
                   strokecolor = cols[i], strokewidth = 0.75)
         else
             V, C, F = Point2f[], Makie.RGBf[], Makie.GLTriangleFace[]
-            add_cells_2d!(V, C, F, cells, painter(style, cells, cols[i], k), 8)
+            faded = highlight && muted && i != step
+            add_cells_2d!(V, C, F, cells,
+                          painter(style, cells, cols[i], k; grain = faded ? WOOD_MUTED_GRAIN : 1.0), 8)
             mesh!(ax, V, F; color = C, shading = NoShading)
         end
         newest = highlight && i == step
