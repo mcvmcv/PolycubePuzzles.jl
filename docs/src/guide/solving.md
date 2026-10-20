@@ -50,6 +50,34 @@ The reduction is exact, and it also speeds the search up: it pins down one
 piece (or the piece covering a central cell) to one representative position
 per symmetry class before searching.
 
+## Ignoring swapped pairs
+
+Many solutions differ only in a small rearrangement. Two touching pieces
+whose cells together can be filled by the same two pieces in another way can
+trade places, and the rest of the solution doesn't change. In the 5×5×5 cube
+of Y pentacubes, two Ys lying side by side with their nubs together make an H
+with a thick bar, and the two nubs can swap. Nearly every solution has a few
+such pairs, and each one doubles the count.
+
+`swaps = true` counts solutions that differ only by such swaps (or chains of
+them) once. With `symmetry`, one solution is kept for each family of
+solutions related by swaps and symmetries:
+
+```jldoctest
+julia> count_solutions(S; symmetry = :all, swaps = true)
+40
+```
+
+```julia
+count_solutions(y5; symmetry = :all)                 # 1264
+count_solutions(y5; symmetry = :all, swaps = true)   # 106
+```
+
+Only swaps between two pieces are found, not rearrangements of three or more.
+Finding the families means enumerating solutions, so `swaps = true` is no
+faster than finding every solution with the same `symmetry`; [`solve`](@ref)
+returns the first solution of each family in search order.
+
 ## Threads
 
 The search can be split over several tasks, using the `ntasks` keyword.

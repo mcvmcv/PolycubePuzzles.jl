@@ -24,6 +24,7 @@ p = Puzzle(box(5, 5, 5), Y3 => 25)
 solve(p; limit = 1)                          # one solution, printed layer by layer
 count_solutions(p)                           # 60672
 count_solutions(p; symmetry = :all)          # 1264 up to rotation and reflection
+count_solutions(p; symmetry = :all, swaps = true)   # 106, ignoring swapped pairs
 ```
 
 ## Example: a 3×3×3 cube from six pieces
@@ -87,16 +88,22 @@ The library has `pentominoes()` and `soma()`.
 
 ## Solving
 
-- `solve(p; limit, symmetry, ntasks)` returns a `Vector{Solution}`,
-- `count_solutions(p; symmetry, ntasks)` counts without storing,
-- `foreach_solution(f, p; symmetry, ntasks)` streams solutions to `f`; return
-  `false` to stop.
+- `solve(p; limit, symmetry, swaps, ntasks)` returns a `Vector{Solution}`,
+- `count_solutions(p; symmetry, swaps, ntasks)` counts without storing,
+- `foreach_solution(f, p; symmetry, swaps, ntasks)` streams solutions to `f`;
+  return `false` to stop.
 
 `symmetry = :all` counts solutions related by a symmetry of the target once
 (reflections included when they map solutions to solutions, e.g. the Soma
 cube's mirror-twin screws swap places); `:rotations` identifies rotations only;
 `:none` (the default) counts every solution. The reduction is exact and also
 prunes the search.
+
+`swaps = true` also counts solutions once that differ only by two touching
+pieces trading places, their cells together filled by the same two pieces
+another way (in the 5×5×5 cube, two Ys side by side with their nubs together
+can swap nubs). This needs every solution found, so it is no faster than
+`solve`.
 
 `ntasks` splits the search tree over concurrent tasks; start Julia with
 `julia --threads=auto` to use all cores. `solve` and `count_solutions` default

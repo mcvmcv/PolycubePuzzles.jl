@@ -88,10 +88,22 @@ function run_search(visit, c::Compiled, ntasks::Int)
     !stop[]
 end
 
+# With `swaps`, the record of classes seen; otherwise nothing.
+classes(p::Puzzle, c::Compiled, swaps::Bool) = swaps ? Classes(Swapper(p, c.reducer.syms)) : nothing
+
+# A found solution's class code, for the classes record `cl`.
+class_of(cl::Classes, c::Compiled, rows) = class_code(cl, [(c.rowtype[r], c.rows[r]) for r in rows])
+
 const SEARCH_KWARGS_DOC = """
 - `symmetry = :none`: with `:all`, solutions related by a symmetry of the
   target (rotation or reflection, where these map solutions to solutions) are
   counted once; with `:rotations`, only rotations are identified.
+- `swaps = false`: if `true`, solutions that differ only by two touching
+  pieces trading places (their cells together filled by the same two pieces
+  another way) are counted once, as are chains of such swaps. Combined with
+  `symmetry`, one solution is kept per class of solutions related by swaps and
+  symmetries. Classes are found by enumerating solutions, so this counts no
+  faster than finding them all.
 - `ntasks`: number of concurrent search tasks; start Julia with `--threads` to
   run them in parallel.
 - `engine = :auto`: the search algorithm. `:bitboard` fills the first empty
@@ -101,23 +113,28 @@ const SEARCH_KWARGS_DOC = """
 """
 
 """
-    foreach_solution(f, p::Puzzle; symmetry = :none, ntasks = 1)
+    foreach_solution(f, p::Puzzle; symmetry = :none, swaps = false, ntasks = 1)
 
 Call `f(sol::Solution)` for every solution of `p`. If `f` returns `false` the
 search stops. Returns `true` if the search ran to completion. With
 `ntasks > 1`, `f` may be called concurrently from several tasks and must be
-thread-safe.
+thread-safe, and with `swaps` which solution stands for a class can vary.
 
 $SEARCH_KWARGS_DOC
 """
-function foreach_solution(f, p::Puzzle{N}; symmetry::Symbol = :none, ntasks::Int = 1,
-                          engine::Symbol = :auto) where {N}
+function foreach_solution(f, p::Puzzle{N}; symmetry::Symbol = :none, swaps::Bool = false,
+                          ntasks::Int = 1, engine::Symbol = :auto) where {N}
     c = compile(p, symmetry; engine)
-    run_search((_, _, rows) -> f(Solution{N}(c.placements[rows])), c, ntasks)
+    cl = classes(p, c, swaps)
+    run_search(c, ntasks) do _, _, rows
+        cl === nothing || isnew!(cl, class_of(cl, c, rows)) || return true
+        f(Solution{N}(c.placements[rows]))
+    end
 end
 
 """
-    solve(p::Puzzle; limit = typemax(Int), symmetry = :none, ntasks = Threads.nthreads())
+    solve(p::Puzzle; limit = typemax(Int), symmetry = :none, swaps = false,
+          ntasks = Threads.nthreads())
 
 Return up to `limit` solutions of `p` as a `Vector{Solution}`. Without a limit
 the order is the same as a sequential search, whatever `ntasks` is.
@@ -125,31 +142,41 @@ the order is the same as a sequential search, whatever `ntasks` is.
 $SEARCH_KWARGS_DOC
 """
 function solve(p::Puzzle{N}; limit::Integer = typemax(Int), symmetry::Symbol = :none,
-               ntasks::Int = Threads.nthreads(), engine::Symbol = :auto) where {N}
+               swaps::Bool = false, ntasks::Int = Threads.nthreads(),
+               engine::Symbol = :auto) where {N}
     limit <= 0 && return Solution{N}[]
     c = compile(p, symmetry; engine)
-    found = [Tuple{Int,Solution{N}}[] for _ in 1:max(ntasks, 1)]
+    cl = classes(p, c, swaps)
+    found = [Tuple{Int,Solution{N},Vector{Int}}[] for _ in 1:max(ntasks, 1)]
     total = Threads.Atomic{Int}(0)
     run_search(c, ntasks) do task, k, rows
-        push!(found[task], (k, Solution{N}(c.placements[rows])))
+        code = cl === nothing ? Int[] : class_of(cl, c, rows)
+        push!(found[task], (k, Solution{N}(c.placements[rows]), code))
+        cl === nothing || isnew!(cl, code) || return true
         Threads.atomic_add!(total, 1) + 1 < limit
     end
     sols = reduce(vcat, found)
     sort!(sols; by = first, alg = MergeSort)  # stable: keeps order within a subtree
-    last.(sols[1:min(limit, length(sols))])
+    # with swaps, the first solution of each class in search order stands for it
+    cl === nothing || unique!(last, sols)
+    [sol for (_, sol, _) in sols[1:min(limit, length(sols))]]
 end
 
 """
-    count_solutions(p::Puzzle; symmetry = :none, ntasks = Threads.nthreads())
+    count_solutions(p::Puzzle; symmetry = :none, swaps = false, ntasks = Threads.nthreads())
 
 The number of solutions of `p`, without materializing them.
 
 $SEARCH_KWARGS_DOC
 """
-function count_solutions(p::Puzzle; symmetry::Symbol = :none, ntasks::Int = Threads.nthreads(),
-                         engine::Symbol = :auto)
+function count_solutions(p::Puzzle; symmetry::Symbol = :none, swaps::Bool = false,
+                         ntasks::Int = Threads.nthreads(), engine::Symbol = :auto)
     c = compile(p, symmetry; engine)
+    cl = classes(p, c, swaps)
     counts = zeros(Int, max(ntasks, 1))
-    run_search((task, _, _) -> (counts[task] += 1; true), c, ntasks)
+    run_search(c, ntasks) do task, _, rows
+        (cl === nothing || isnew!(cl, class_of(cl, c, rows))) && (counts[task] += 1)
+        true
+    end
     sum(counts)
 end

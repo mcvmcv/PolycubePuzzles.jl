@@ -35,7 +35,8 @@ p = Puzzle(box(5, 5, 5), Y3 => 25)
 
 sol = solve(p; limit = 1)[1]          # a solution, printed layer by layer
 count_solutions(p)                    # 60672
-count_solutions(p; symmetry = :all)   # 1264 essentially different solutions
+count_solutions(p; symmetry = :all)   # 1264 up to rotation and reflection
+count_solutions(p; symmetry = :all, swaps = true)   # 106, ignoring swapped pairs
 ```
 
 and with a Makie backend loaded, `plot_steps(sol)` draws building

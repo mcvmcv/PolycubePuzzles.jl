@@ -261,6 +261,36 @@ end
         @test occursin("Solution{2} with 12 pieces", repr("text/plain", sols[1]))
     end
 
+    @testset "swaps" begin
+        # two Ys, nubs together, fill an H with a thick bar in two ways
+        H = shape"""
+        XXXX
+        .XX.
+        XXXX
+        """
+        h = Puzzle(H, Y => 2; reflections = true)
+        @test count_solutions(h) == 2
+        @test count_solutions(h; swaps = true) == 1
+        @test length(solve(h; swaps = true)) == 1
+        # counts checked against a brute-force union of all solutions over
+        # one-swap neighbours and symmetries
+        p = Puzzle(box(6, 10), [s => 1 for s in P5]; reflections = true)
+        @test count_solutions(p; symmetry = :all, swaps = true) == 1457
+        s = Puzzle(box(3, 3, 3), [s => 1 for s in soma()])
+        @test count_solutions(s; symmetry = :rotations, swaps = true) == 79
+        # reflections also swap the mirror-image pieces A and B
+        @test count_solutions(s; symmetry = :all, swaps = true) == 40
+        @test count_solutions(s; symmetry = :all, swaps = true, ntasks = 1) == 40
+        @test length(solve(s; symmetry = :all, swaps = true)) == 40
+        @test length(solve(s; symmetry = :all, swaps = true, limit = 7)) == 7
+        n = Threads.Atomic{Int}(0)
+        foreach_solution(_ -> (Threads.atomic_add!(n, 1); true), s; symmetry = :all, swaps = true)
+        @test n[] == 40
+        # without a limit the representatives don't depend on ntasks
+        @test solve(s; symmetry = :all, swaps = true, ntasks = 1) ==
+              solve(s; symmetry = :all, swaps = true, ntasks = 4)
+    end
+
     @testset "plots" begin
         pieces = [
             [(1, 3, 1), (2, 3, 1), (3, 3, 1), (3, 2, 1), (1, 3, 2)],
