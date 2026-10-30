@@ -95,14 +95,16 @@ told apart. There are two search engines:
 - **Bitboard**: the filled cells are a bitset and every placement a
   precomputed mask. The search always fills the first empty cell, working
   along the target's shortest direction first, so each step is just a couple
-  of bitwise operations. This is fastest for most flat puzzles: all 2339
-  pentomino solutions of the 10×6 rectangle take about 1.5 s.
+  of bitwise operations. A placement that walls off an empty pocket too
+  small for any piece is rejected at once. This is fastest for most flat
+  puzzles: all 2339
+  pentomino solutions of the 10×6 rectangle take about 1.2 s.
 - **Dancing links** (Knuth's Algorithm X): always fills the cell with the
   fewest ways left to fill it. Each step costs more, but the search can be far
   smaller. For the 5×5×5 cube of Y pentacubes it is hundreds of times faster
   than the bitboard search.
 
 By default (`engine = :auto`) both are estimated with Knuth's random-probe
-method, a few hundred random walks down each search tree, which takes a few
-hundredths of a second, and the faster one is used. Pass `engine = :dlx` or
+method, random walks down each search tree for up to a tenth of a second
+each (much less for small puzzles), and the faster one is used. Pass `engine = :dlx` or
 `engine = :bitboard` to choose.

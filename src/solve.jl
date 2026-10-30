@@ -109,7 +109,8 @@ const SEARCH_KWARGS_DOC = """
 - `engine = :auto`: the search algorithm. `:bitboard` fills the first empty
   cell each time, with very cheap steps; `:dlx` (dancing links) fills the most
   constrained cell, which can make the search far smaller. `:auto` estimates
-  both from a few hundred random probes of the search tree and uses the faster.
+  both from random probes of the search trees (up to 0.1 s each) and uses
+  the faster.
 """
 
 """

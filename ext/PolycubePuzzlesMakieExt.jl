@@ -422,14 +422,13 @@ function explore(sols::AbstractVector{<:Solution}; style::Symbol = :flat, size =
                  azimuth = 1.15π, elevation = 0.18π, kw...)
     isempty(sols) && throw(ArgumentError("no solutions to explore"))
     sol1 = first(sols)
-    n = length(sol1)
     fig = Figure(; size)
     ax = sol1 isa Solution{3} ? new_axis(fig[1, 1], sol1; azimuth, elevation) : new_axis(fig[1, 1], sol1)
     controls = GridLayout(fig[2, 1]; tellwidth = false)
 
     prev = Button(controls[1, 1]; label = "◀", width = 40)
     # the sliders take whatever width the buttons and status line leave
-    stepslider = Slider(controls[1, 2]; range = 0:n, startvalue = n)
+    stepslider = Slider(controls[1, 2]; range = 0:length(sol1), startvalue = length(sol1))
     next = Button(controls[1, 3]; label = "▶", width = 40)
     status = Label(controls[1, 4], ""; halign = :left, width = 260)
 
@@ -461,7 +460,8 @@ function explore(sols::AbstractVector{<:Solution}; style::Symbol = :flat, size =
     function redraw()
         i = current()
         sol = sols[i]
-        k = stepslider.value[]
+        n = length(sol)
+        k = min(stepslider.value[], n)
         order = order_for(i)
         empty!(ax)
         status.text = k == 0 ? "Empty" : k == n ? "Complete: $n pieces" :
@@ -473,7 +473,13 @@ function explore(sols::AbstractVector{<:Solution}; style::Symbol = :flat, size =
     end
 
     onany((_...) -> redraw(), stepslider.value, wood.active, ghosts.active, arrows.active, muted.active)
-    many && on(_ -> redraw(), solslider.value)
+    # solutions may differ in their number of pieces (for piece count ranges)
+    many && on(solslider.value) do i
+        n = length(sols[i])
+        stepslider.range[] = 0:n
+        set_close_to!(stepslider, n)
+        redraw()
+    end
     on(_ -> set_close_to!(stepslider, stepslider.value[] - 1), prev.clicks)
     on(_ -> set_close_to!(stepslider, stepslider.value[] + 1), next.clicks)
     on(reset.clicks) do _

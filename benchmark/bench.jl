@@ -14,7 +14,11 @@ cases = [
     "Y pentacubes 5x5x5, up to symmetry" => (Puzzle(box(5, 5, 5), Shape([(c..., 1) for c in Y]) => 25), :all, 1264),
     "Soma cube, all solutions" => (Puzzle(box(3, 3, 3), [s => 1 for s in soma()]), :none, 11520),
 ]
-count_solutions(Puzzle(box(20, 3), P5; reflections = true); ntasks = 1)   # compile
+# compile, in 2D and 3D, both engines
+for engine in (:dlx, :bitboard)
+    count_solutions(Puzzle(box(20, 3), P5; reflections = true); ntasks = 1, engine)
+    count_solutions(Puzzle(box(2, 2, 2), Shape((1, 1, 1), (2, 1, 1)) => 4); ntasks = 1, engine)
+end
 for (name, (p, sym, expected)) in cases
     t = @elapsed n = count_solutions(p; symmetry = sym, ntasks = 1)
     n == expected || error("$name: got $n, expected $expected")

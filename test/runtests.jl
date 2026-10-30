@@ -126,6 +126,16 @@ end
         for p in cases, mode in (:rotations, :all)
             @test count_solutions(p; symmetry = mode) == naive_orbits(p, mode)
         end
+
+        # a piece listed twice: copies under different types are told apart, so
+        # 2 tilings x 4 labellings = 8 solutions, in 3 orbits; the mirror must
+        # pair each L type with its own Lm type
+        L, Lm = P5.L, Shape([(-x, y) for (x, y) in P5.L])
+        twice = Puzzle(box(5, 4), [L => 1, Lm => 1, L => 1, Lm => 1])
+        @test count_solutions(twice) == 8
+        @test count_solutions(twice; symmetry = :all) == 3
+        @test count_solutions(Puzzle(box(5, 4), [L => 2, Lm => 2]); symmetry = :all) ==
+              naive_orbits(Puzzle(box(5, 4), [L => 2, Lm => 2]), :all)
     end
 
     @testset "both engines" begin
@@ -316,6 +326,16 @@ end
                 @test all(isfile, pngs)
             end
             @test explore([sol3, sol3]) isa Figure
+            # solutions with different numbers of pieces
+            mono, dom = Shape((1, 1)), Shape((1, 1), (2, 1))
+            sols = solve(Puzzle(box(2, 2), [mono => 0:4, dom => 0:2]))
+            fig = explore(sols)
+            stepslider, solslider = [b for b in fig.content if b isa Slider]
+            for i in eachindex(sols)
+                set_close_to!(solslider, i)
+                @test stepslider.range[] == 0:length(sols[i])
+                @test stepslider.value[] == length(sols[i])
+            end
             @test_throws ArgumentError explore(Solution{3}[])
         end
     end

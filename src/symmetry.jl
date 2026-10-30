@@ -20,19 +20,25 @@ struct Sym
 end
 
 # Piece type permutation induced by reflecting all pieces, or nothing if the
-# piece multiset isn't mirror-closed. Types with no copies are ignored.
+# piece multiset isn't mirror-closed. Types with no copies are ignored. A type
+# may be listed more than once, so each is paired with a distinct mirror twin
+# (an achiral type with itself), keeping this a permutation.
 function mirror_types(p::Puzzle{N}) where {N}
     rot(s) = orientations(s; reflections = false)
     mirror(s) = Shape{N}([(-c[1], Base.tail(c)...) for c in s.cells])
     σ = collect(eachindex(p.pieces))
     p.reflections && return σ
     forms = [rot(s) for s in p.pieces]
+    paired = falses(length(σ))
     for t in eachindex(p.pieces)
-        last(p.counts[t]) == 0 && continue
+        (paired[t] || last(p.counts[t]) == 0) && continue
         mt = rot(mirror(p.pieces[t]))
-        u = findfirst(u -> forms[u] == mt && p.counts[u] == p.counts[t], eachindex(p.pieces))
+        mt == forms[t] && continue
+        u = findfirst(u -> !paired[u] && forms[u] == mt && p.counts[u] == p.counts[t],
+                      eachindex(p.pieces))
         u === nothing && return nothing
-        σ[t] = u
+        σ[t], σ[u] = u, t
+        paired[t] = paired[u] = true
     end
     σ
 end
